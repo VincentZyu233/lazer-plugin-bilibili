@@ -1,0 +1,5 @@
+{"code":0,"data":{"dash":{"audio":[
+{"id":30216,"bandwidth":43962,"baseUrl":"https://cn-gdfs-cc-02-18.bilivideo.com/low.m4s"},
+{"id":30232,"bandwidth":102931,"baseUrl":"https://cn-gdfs-cc-02-18.bilivideo.com/medium.m4s"},
+{"id":30280,"bandwidth":203786,"baseUrl":"https://cn-gdfs-cc-02-18.bilivideo.com/high.m4s"}
+],"flac":{"audio":{"id":30251,"bandwidth":1500000,"baseUrl":"https://cn-gdfs-cc-02-18.bilivideo.com/flac.m4s"}}}}}

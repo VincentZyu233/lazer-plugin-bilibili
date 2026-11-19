@@ -1,0 +1,29 @@
+# 构建产物
+dist/
+*.zip
+*.tar.gz
+
+# 依赖
+node_modules/
+
+# 测试 / 工具产物
+__pycache__/
+*.pyc
+.pytest_cache/
+coverage/
+
+# 本地环境
+.env
+.env.*
+*.log
+*.tmp
+temp/
+tmp/
+.DS_Store
+Thumbs.db
+AGENTS.local.md
+*.local.md
+
+# 编辑器
+.vscode/
+.idea/

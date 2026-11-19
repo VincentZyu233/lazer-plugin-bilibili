@@ -1,0 +1,5 @@
+# 让 Markdown 计入 GitHub 语言统计
+*.md linguist-detectable=true linguist-documentation=false
+
+# Lua 是主语言
+*.lua linguist-detectable=true
