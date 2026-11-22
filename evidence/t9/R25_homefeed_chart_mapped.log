@@ -1,0 +1,5 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t9_homefeed_budget_test.dart
+00:00 +0: T9 live: homeFeed with a multi-page popular list
+homeFeed THREW 插件请求失败，请重试或更新插件。 (408) (896 ms, requests=3)
+00:01 +1: All tests passed!

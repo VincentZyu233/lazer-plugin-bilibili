@@ -1,0 +1,12 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_search_live_fine_test.dart
+00:00 +0: T8 live: fine search ceiling with both buckets
+live limit=20 -> songs=20 artists=20 truncated=false limit=20 (1518 ms)
+live limit=25 -> songs=25 artists=25 truncated=false limit=25 (1283 ms)
+live limit=30 -> songs=30 artists=30 truncated=false limit=30 (1351 ms)
+live limit=35 -> songs=35 artists=35 truncated=false limit=35 (1304 ms)
+live limit=40 -> songs=40 artists=40 truncated=false limit=40 (1314 ms)
+live limit=45 -> 408 (1634 ms)
+live limit=48 -> 408 (1663 ms)
+live limit=50 -> 408 (1627 ms)
+00:12 +1: All tests passed!

@@ -1,0 +1,7 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_homefeed_cost_test.dart
+00:00 +0: T8 live: homeFeed request cost
+[homeFeed] featuredSongs=20 albums=_Map<String, Object?> requests=2
+[requests] {/x/frontend/finger/spi: 1, /x/web-interface/popular: 1}
+[albums(18)] List(4) newRequests=5
+00:01 +1: All tests passed!

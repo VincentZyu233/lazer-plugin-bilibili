@@ -1,0 +1,11 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t9_album_offline_cliff_test.dart
+00:00 +0: T9 offline: albumSongs instruction cliff vs part count
+parts=30 viewBytes=7328 -> rows=30 (85 ms)
+parts=60 viewBytes=14408 -> rows=60 (55 ms)
+parts=90 viewBytes=21488 -> rows=90 (42 ms)
+parts=120 viewBytes=28652 -> rows=120 (37 ms)
+parts=160 viewBytes=38252 -> rows=160 (41 ms)
+parts=200 viewBytes=47852 -> THREW 插件请求失败，请重试或更新插件。 (408) (43 ms)
+parts=300 viewBytes=71852 -> THREW 插件请求失败，请重试或更新插件。 (408) (79 ms)
+00:01 +1: All tests passed!

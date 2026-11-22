@@ -15,14 +15,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lazer_nextgen/plugins/lua_plugin_runtime.dart';
 import 'package:lazer_nextgen/plugins/plugin_manifest.dart';
 
-String get _repoRoot {
-  // 优先级：环境变量 PLUGIN_ROOT > 从当前目录向上找 manifest.json。
-  // 本仓库没有 pubspec.yaml，所以要借 Lazer 源码树的 flutter 环境跑，
-  // 那种情况下当前目录是 Lazer 根，必须用 PLUGIN_ROOT 指回本仓库。
-  final override = Platform.environment['PLUGIN_ROOT'];
-  if (override != null && override.isNotEmpty) {
-    return override.replaceAll('\\', '/');
-  }
+final String _srcRoot = Platform.environment['PLUGIN_ROOT'] ?? _findRepoRoot();
+final String _fixturesRoot = '$_srcRoot/test/fixtures';
+
+/// 本仓库没有 pubspec.yaml，要借 Lazer 源码树的 flutter 环境跑。那种情况下
+/// 当前目录是 Lazer 根，所以优先用 PLUGIN_ROOT 指回本仓库；否则从当前目录
+/// 向上找 manifest.json + main.lua。
+String _findRepoRoot() {
   var dir = Directory.current.absolute;
   for (var i = 0; i < 6; i++) {
     if (File('${dir.path}/manifest.json').existsSync() &&
@@ -35,9 +34,6 @@ String get _repoRoot {
   }
   return Directory.current.absolute.path;
 }
-
-String get _srcRoot => _repoRoot;
-String get _fixturesRoot => '$_repoRoot/test/fixtures';
 
 // ---------------------------------------------------------------------------
 // Request bookkeeping
@@ -93,7 +89,7 @@ typedef _PageFn = List<Map<String, dynamic>> Function(int pn, int ps);
 /// behaviour, and a static gate (C11) refuses a `_paged` call that omits it.
 enum PastEnd {
   /// `/x/v3/fav/resource/list`: `medias: []` AND `info.media_count: 0`
-  /// (measured live, 实测记录 R1_out_of_range).
+  /// (measured live, evidence/t8/R1_out_of_range.log).
   zeroedCount,
 
   /// `/x/v3/fav/folder/created/list-all`: the endpoint ignores paging and
@@ -191,6 +187,7 @@ void _resetFixtureLayer() {
   _rankingOverride = null;
   _multiPartParts = 3;
   _emptyCidAt = 0;
+  _realArcMode = false;
 }
 
 // Kept as named switches so the T4 assertions keep reading naturally.
@@ -198,6 +195,13 @@ bool _bulkArcMode = false;
 bool _favFoldersNoCover = false;
 /// 多 P fixture 开关：view/player 都切到多 P 数据。
 bool _multiPart = false;
+/// T11：让 `space_arc` 返回**真机原样响应**（evidence/t11 落盘，未再编码）。
+///
+/// 这个开关存在的理由就是 T11 的覆盖缺口：`_bulkVlist` 每行只有 6 个短字段，
+/// 而真站每行 38 个字段、标题最长 60 字节、还带 `&`（真实标题里确实有
+/// "单人&多人合作"这种），`clean_title` 的逐字节扫描成本差一个数量级。用轻
+/// 量行测出来的 "100 行全绿" 不代表真机能过。
+bool _realArcMode = false;
 /// `_multiPartView` 的分 P 数。默认 3；T8#19 需要 40 才能观测到 30 行夹取。
 int _multiPartParts = 3;
 /// 让第 N 个 P 的 `cid` 为空（1-based，0 = 关闭）。空 cid 的行无法播放，
@@ -346,7 +350,7 @@ List<Map<String, dynamic>> _wireArtistRows(int from, int count) =>
       };
     });
 
-/// A real search row, cloned from a live capture (`实测记录 capture_search`,
+/// A real search row, cloned from a live capture (`evidence/t7/capture_search.json`,
 /// 66 keys, 1527 bytes) with only the identifying fields varied.
 ///
 /// Byte size matters: the host runs the whole `search` op under a 250k
@@ -478,7 +482,7 @@ int? _pastEndCode(String kind) {
     case 'reply_hot':
       return -400; // measured: pn past the end is 请求错误, not an empty page
     case 'space_arc':
-      return -799; // measured: -799 with an empty vlist (实测记录 R1)
+      return -799; // measured: -799 with an empty vlist (evidence/t8/R1)
     default:
       return null;
   }
@@ -754,6 +758,9 @@ Future<Map<String, dynamic>> _handler(Map<String, dynamic> spec) async {
     case 'space_arc':
       if (_bulkArcMode) {
         body = jsonEncode({'code': 0, 'data': {'list': {'vlist': _bulkVlist(pn)}}});
+      } else if (_realArcMode) {
+        // 真机原样字节：不做任何再编码，解码成本与映射成本都必须是真实的。
+        body = _fixture('space_arc_real_p$pn');
       } else {
         body = _fixture('space_arc');
       }
@@ -787,7 +794,7 @@ Future<Map<String, dynamic>> _handler(Map<String, dynamic> spec) async {
 final _manifest = PluginManifest.fromJson(const {
   'id': 'community.bilibili.music',
   'name': '哔哩哔哩',
-  'version': '0.4.2',
+  'version': '0.4.3',
   'provider': 'bilibili',
   'apiVersion': 1,
   // 与 src/manifest.json 逐项一致（T6#21 会断言；D12 曾是这里停在 v0.1.0）。
@@ -1153,7 +1160,7 @@ void main() {
   test('T5#21 search(limit=100) is clamped to 35 rows, ids 1..35', () async {
     // T8/D3: this test used to assert 100 rows on 6-field synthetic rows and
     // certify a limit the wire cannot serve. Real wire rows 408 at 45 live
-    // (实测记录 R13_search_live_fine), so the contract is now "the clamp
+    // (evidence/t8/R13_search_live_fine.log), so the contract is now "the clamp
     // happens and the rows are the first 35", not "100 arrives".
     _paged('search', (pn, ps) => _videoRows((pn - 1) * ps + 1, ps), total: 250, pastEnd: PastEnd.keepsTotal);
     final result = await rt.invoke('search', {'query': 'paging', 'limit': 100, 'offset': 0}) as Map;
@@ -2080,7 +2087,7 @@ void main() {
   // ---- T06: lyrics three-state (E12 verdict: keep 70) ----
 
   test('T6#19 lyrics with no subtitle and no lrclib hit stays retryable', () async {
-    // E12 (实测记录 E12_puremusic_matrix)：2.0.210 会把空答复落盘成
+    // E12 (evidence/t6/E12_puremusic_matrix.md)：2.0.210 会把空答复落盘成
     // 121 B 空壳，且该空壳没有 savedAt，2.0.300 的 24h TTL 也救不回来。
     // 所以"两个源都没有"必须报 70，绝不能返回空表。
     _paged('player', (pn, ps) => <Map<String, dynamic>>[], pastEnd: PastEnd.notPaged);
@@ -2129,7 +2136,7 @@ void main() {
       expect(rows, isNotEmpty, reason: '$name fixture 不能为空');
       for (final row in rows.cast<Map>()) {
         expect(row.containsKey('cid'), isTrue,
-            reason: '$name 行缺 cid — 真站 100/100 都有（实测记录 G0_capture_fields）');
+            reason: '$name 行缺 cid — 真站 100/100 都有（evidence/t7/G0_capture_fields.log）');
         expect(row.containsKey('videos'), isTrue,
             reason: '$name 行缺 videos — 多 P 判定要靠它，零请求');
         expect(row.containsKey('aid'), isTrue, reason: '$name 行缺 aid');
@@ -2291,7 +2298,7 @@ void main() {
 
   test('T7#12 artistSongs(offset=800) is a retryable error, not a 408', () async {
     // 签名族：每页 50，offset=800 需要第 17 页；实测 14 次成功、17 页即 408
-    // （实测记录 R2_artist_budget）。旧代码用明文预算 32，直接把 VM 打挂。
+    // （evidence/t7/R2_artist_budget.log）。旧代码用明文预算 32，直接把 VM 打挂。
     _paged('space_arc', (pn, ps) => _bulkVlist(pn), total: 4000, pastEnd: PastEnd.errorCode);
     final result = await rt.invoke('artistSongs', {
       'id': '888', 'limit': 100, 'offset': 800,
@@ -2344,7 +2351,7 @@ void main() {
   // ---- T8/T00: cursor trustworthiness ----
   //
   // The live folder is 88 songs in pages of 38/40/8, and page 4 answers
-  // `medias: []` with `info.media_count: 0` (实测记录 R1_out_of_range).
+  // `medias: []` with `info.media_count: 0` (evidence/t8/R1_out_of_range.log).
   // Reading limit=100 therefore always probes page 4, and the old code wrote
   // that zero into the cursor: the second call on the same key returned nothing
   // without sending a request. Every case below is red on the pre-T8 src.
@@ -2392,14 +2399,14 @@ void main() {
   });
 
   test('T8#05 opening a folder does not poison favorites', () async {
-    // 真机现场（实测记录 R7_live_poison_open_folder）：用户点开的正是
+    // 真机现场（evidence/t8/R7_live_poison_open_folder.log）：用户点开的正是
     // 默认收藏夹，所以 playlistSongs 与 favorites 共用 `fav:<media_id>` 这一
     // 条游标——收藏夹被探到越界后，「我喜欢」跟着变空。
     _paged('fav_resource', poisonedFolder(), total: 88, pastEnd: PastEnd.zeroedCount);
     // list_all 的第一行就是默认收藏夹，id 与上面 playlistSongs 用的一致。
     _paged('list_all', (pn, ps) => <Map<String, dynamic>>[
           <String, dynamic>{'id': 72000000, 'title': '默认收藏夹', 'media_count': 88},
-          <String, dynamic>{'id': 72000001, 'title': '稍后再看', 'media_count': 5},
+          <String, dynamic>{'id': 72219751, 'title': '稍后再看', 'media_count': 5},
         ], total: 2, pastEnd: PastEnd.notPaged);
     await login();
     await rt.invoke('playlistSongs', {'id': '72000000', 'limit': 100, 'offset': 0});
@@ -2522,7 +2529,7 @@ void main() {
 
   test('T9#18 a non-empty page with no count does not latch the cursor', () async {
     // 真站形态：行照给，但 page 里没有 count/acount。旧代码把 0 写成 total，
-    // 之后 skip >= 0 恒真，offset=20 起永远返回空表（实测记录 R3）。
+    // 之后 skip >= 0 恒真，offset=20 起永远返回空表（evidence/t9/R3）。
     _paged('reply', (pn, ps) => _commentRows((pn - 1) * ps + 1, ps),
         pastEnd: PastEnd.errorCode);
     _omitCount.add('reply');
@@ -2588,7 +2595,7 @@ void main() {
   });
 
   test('T8#06 comments never report the request offset as the total', () async {
-    // 真站形态（实测记录 R9_past_end_offline）：60 条之后是空页，且
+    // 真站形态（evidence/t8/R9_past_end_offline.log）：60 条之后是空页，且
     // `page.count` 从不出现。旧代码把 `skip + #replies` 当 total，于是
     // offset=1000 回答 total=1000。
     _paged('reply', (pn, ps) {
@@ -2803,7 +2810,7 @@ void main() {
 
   test('T8#19 albumSongs returns a full page instead of clamping to 30', () async {
     // 旧断言保护的是 D1 本身（"夹到 30 行"）。30 行 + limit=100 让宿主在
-    // 第一页就判 hasMore=false，第 31 个 P 起永久不可达（实测记录 R20）。
+    // 第一页就判 hasMore=false，第 31 个 P 起永久不可达（evidence/t9/R20）。
     // 现在：单页返回 min(limit, 剩余)，宿主自己翻页。
     _multiPart = true;
     _multiPartParts = 40;
@@ -2968,8 +2975,8 @@ void main() {
   // ---- T10: 首页专辑来源与降级缓存 ----
   //
   // 缺陷：`homeFeed.albums` 只读热门，而真机热门 20/20 全是单 P
-  // （实测记录 R18_popular_videos），于是「为你推荐的新发行」是一个
-  // 永远不显示的区块；多 P 候选全在榜单里（实测记录 R27_homefeed_chart_raw）。
+  // （evidence/t8/R18_popular_videos.log），于是「为你推荐的新发行」是一个
+  // 永远不显示的区块；多 P 候选全在榜单里（evidence/t9/R27_homefeed_chart_raw.log）。
   //
   // 408 的成因不是榜单行数，是**映射时机**：`chart_rows` 把 100 行映射成 song
   // 形状（R25 408），`chart_raw` 只读原始行（R27 6 请求正常）。所以修法只能是
@@ -3183,5 +3190,86 @@ void main() {
         reason: 'albums() 是显式浏览操作，榜单失败必须照旧上抛');
     final error = (result as Map)['error'] as Map;
     expect(error['httpStatus'], 429, reason: '-412 归为限流');
+  });
+
+  test('T11#01 artistSongs(limit=100) answers on the REAL two-page response',
+      () async {
+    // 宿主的 UP 主页固定 limit=100（platform_catalog.dart:285-287）。v0.4.2 在
+    // 这条调用上 408，而 T4#18 用的是 `_bulkVlist` 的 6 字段短行 —— 覆盖缺口。
+    // 这里用的是 evidence/t11 落盘的真机原样 body：38 字段/行、标题最长 60 字节、
+    // 含 `&` 实体。
+    _realArcMode = true;
+    try {
+      final result = await rt.invoke('artistSongs', {'id': '7000003', 'limit': 100, 'offset': 0});
+      expect(result is List, isTrue, reason: '不得是 {error} 或空表：$result');
+      final rows = result as List;
+      expect(rows.length, 100, reason: '两页各 50 行必须都映射出来');
+      expect((rows.first as Map)['id'], 'BV1LFyVzdEjV');
+      expect((rows.last as Map)['id'], 'BV197421f76g');
+      // 标题必须是清洗后的：无 '<'，且含 '&' 的真标题原样保留 '&'（不是实体）。
+      final titles = [for (final r in rows) '${(r as Map)['title']}'];
+      expect(titles.every((t) => !t.contains('<')), isTrue);
+      expect(titles.any((t) => t.contains('&')), isTrue,
+          reason: '真机标题里就有 &，它不该被丢掉或被转义');
+      // 时长与作者必须来自行本身。
+      expect((rows.first as Map)['durationMs'], 442000);
+      final artists = (rows.first as Map)['artists'] as List;
+      expect((artists.first as Map)['name'], 'uploader_07x');
+    } finally {
+      _realArcMode = false;
+    }
+  });
+
+  test('T11#02 the 51st..188th uploads stay reachable on the real response',
+      () async {
+    // 第 3/4 页是 50+38 行、第 5 页空。宿主的 all() 靠 hasMore 逐页走，
+    // 所以 offset=100 必须给出剩下的 88 行，且与首页不重叠。
+    _realArcMode = true;
+    try {
+      final first = await rt.invoke('artistSongs', {'id': '7000003', 'limit': 100, 'offset': 0}) as List;
+      final rest = await rt.invoke('artistSongs', {'id': '7000003', 'limit': 100, 'offset': 100}) as List;
+      expect(rest.length, 88);
+      final headIds = first.map((r) => (r as Map)['id']).toSet();
+      expect(rest.any((r) => headIds.contains((r as Map)['id'])), isFalse,
+          reason: '两页不得重叠');
+      // past-end：第 5 页空 -> 空页（Lua 空表到 Dart 是 {}），不是错误。
+      final past = await rt.invoke('artistSongs', {'id': '7000003', 'limit': 100, 'offset': 188});
+      expect(past is List ? past.isEmpty : (past as Map).isEmpty, isTrue);
+      // 而且空页不得毒化游标：再问一次首页仍要给出 100 行。
+      final again = await rt.invoke('artistSongs', {'id': '7000003', 'limit': 100, 'offset': 0}) as List;
+      expect(again.length, 100);
+    } finally {
+      _realArcMode = false;
+    }
+  });
+
+  test('T11#03 clean_title keeps markup and entity semantics', () async {
+    // 快路径是纯优化，语义必须逐字不变：带标记的仍要剥标签 + 解实体。
+    _paged('space_arc', (pn, ps) => <Map<String, dynamic>>[
+      if (pn == 1) ...<Map<String, dynamic>>[
+        {
+          'bvid': 'BV1clean0001',
+          'title': '<em class="keyword">周杰伦</em> &amp; 方文山 &#39;经典&#39;',
+          'author': 'UP&amp;co',
+          'mid': 888,
+          'pic': '//i0.hdslb.com/bfs/a.jpg',
+          'length': '3:00',
+        },
+        {
+          'bvid': 'BV1clean0002',
+          'title': '纯文本 & 符号 无标记',
+          'author': 'UP',
+          'mid': 888,
+          'pic': '//i0.hdslb.com/bfs/b.jpg',
+          'length': '4:00',
+        },
+      ],
+    ], total: 2, pastEnd: PastEnd.keepsTotal);
+    final rows = await rt.invoke('artistSongs', {'id': '888', 'limit': 10, 'offset': 0}) as List;
+    expect(rows.length, 2);
+    expect((rows[0] as Map)['title'], "周杰伦 & 方文山 '经典'");
+    expect((rows[1] as Map)['title'], '纯文本 & 符号 无标记');
+    // 作者名也走同一条路径，同样要解实体。
+    expect(((rows[0] as Map)['artists'] as List).first['name'], 'UP&co');
   });
 }

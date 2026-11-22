@@ -278,7 +278,7 @@ function M.lyrics(id)
   -- answer is persisted as pureMusic on 2.0.210, so this is reported as a
   -- retryable failure rather than as "no lyrics".
   --
-  -- Re-verified for T6 (实测记录 E12_puremusic_matrix): the two hosts
+  -- Re-verified for T6 (evidence/t6/E12_puremusic_matrix.md): the two hosts
   -- disagree, so the conservative branch stays. 2.0.300 does not persist an
   -- empty answer at all (cached_lyrics_store.dart:87 returns early when the
   -- payload has neither timed lyrics nor pureMusic), but 2.0.210 does, and the

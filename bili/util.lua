@@ -82,8 +82,25 @@ end
 
 -- Search titles embed `<em class="keyword">…</em>`. Strip everything between a
 -- '<' and the next '>' with a plain-text scan; captures are unavailable.
+--
+-- Fast path: a title with no '<' and no '&' is returned as-is. The scan below
+-- copies the string ONE BYTE AT A TIME into a table and then runs five
+-- `M.replace` passes over the result, so a 60-byte upload title used to cost
+-- ~150 interpreter instructions to produce a value identical to `M.trim`. That
+-- is invisible on a 20-row page and fatal on the host's UP-artist call, which
+-- asks for 100 rows at once (platform_catalog.dart:285-287): measured on the
+-- real two-page /x/space/wbi/arc/search response (evidence/t11), the mapping
+-- stage alone hit the 250k instruction budget at row 86-95 while two 50-row
+-- pages decoded fine. With this path the same 100 rows map in one call
+-- (evidence/t11/R2_breakdown.log). Semantics are unchanged: with no markup the
+-- scan's output IS `source`, and with no '&' all five replacements are the
+-- identity.
 function M.clean_title(value)
   local source = M.text(value)
+  if string.find(source, "<", 1, true) == nil and
+     string.find(source, "&", 1, true) == nil then
+    return M.trim(source)
+  end
   local out = {}
   local index = 1
   local length = string.len(source)

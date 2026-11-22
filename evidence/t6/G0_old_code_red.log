@@ -1,0 +1,278 @@
+00:00 +0: loading <plugin>/test/plugin_contract_test.dart
+00:00 +0: decode sources + describe
+00:00 +1: search maps titles/covers/durations, wbi signed
+00:00 +2: song returns detail with cid/extra
+00:00 +3: stream picks FLAC and carries Referer
+00:00 +4: lyrics builds synced lines[] from B站 ai-zh subtitle
+00:00 +5: session / cookie: loginCookie maps nav profile
+00:00 +6: playlists/favorites mark the default folder
+00:00 +7: setFavorite writes with csrf
+00:00 +8: homeFeed/charts/recommendations/comments shapes
+00:00 +8 -1: homeFeed/charts/recommendations/comments shapes [E]
+  Expected: a string starting with 'chart:'
+    Actual: 'rank:all'
+  
+  package:matcher                                                  expect
+  package:flutter_test/src/widget_tester.dart 473:18               expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 708:5  main.<fn>
+  
+00:00 +8 -1: artistSongs wbi signed with wts (UP 主页投稿，缺 wts 会 412)
+00:00 +9 -1: artist / artistAlbums: UP 主页不再报 unsupported (资料加载失败)
+00:00 +10 -1: QR generate -> URL -> poll 803 with set-cookie
+00:00 +11 -1: budget gate: synced lines[] returned fast
+00:00 +12 -1: budget gate: 100 songs map without instruction overflow
+00:00 +13 -1: unknown operation returns structured error, no crash
+00:00 +14 -1: T4#16 search leaves albums and playlists empty
+00:00 +15 -1: T4#17 search artists carry UP row shape with albumCount 0
+00:01 +16 -1: T4#18 artistSongs aggregates two pages into 100 rows at limit=100
+00:01 +17 -1: T4#19 -412 maps to 429 throttle (T5: -352 moved to transient)
+00:01 +18 -1: cover fix: playlist without own cover falls back to first video cover
+00:01 +19 -1: T5#21 search(limit=100, offset=0) returns 100 rows, ids 1..100
+00:01 +20 -1: T5#22 search(limit=100, offset=100) is rows 101..200, no overlap
+00:01 +21 -1: T5#23 comments follow host offset arithmetic on short pages
+00:01 +22 -1: T5#24 playlists slices list-all locally: 150 folders -> 100/50/0
+00:01 +23 -1: T5#25a short page mid-offset returns 20 rows starting at global 16
+00:01 +24 -1: T5#25b a short page in the middle does not truncate the listing
+00:01 +25 -1: T5#26 parse_duration accumulates HH:MM:SS segments
+00:01 +26 -1: T5#26b rows without bvid are dropped, never emitted as id=""
+00:01 +27 -1: T5#27 -400 -> 400 (not 401), -412 -> 429, -352 -> 70 with no status
+00:01 +28 -1: T5#27b unsupported op -> code 501, not an auth failure
+00:01 +29 -1: T5#28 wbi signs with a SECONDS wts and a 32-char salt
+00:01 +30 -1: T5#29 a rejected signature refreshes the salt exactly once
+00:01 +31 -1: T5#30 a failed favorite write is never replayed
+00:01 +32 -1: T5#31 a 4-hop redirect chain stops at 3 and reports transient
+00:01 +33 -1: T5#32 a cross-host redirect drops the session cookie
+00:01 +34 -1: T5#33 song(bvid:cid) resolves that part; plain bvid keeps the old id
+00:01 +35 -1: T5#34 stream(bvid:cid) requests that cid and never the first part
+00:01 +36 -1: T5#35 lyrics(bvid:cid) reads that part, not the first one
+00:01 +37 -1: T5#36 albumSongs returns one row per part, each with its own cid
+00:01 +38 -1: T5#36b a plain bvid still resolves the same track as before
+00:01 +39 -1: T5#44 cover backfill is budgeted and cached across opens
+00:02 +40 -1: T5#44b an empty folder is cached as empty, not retried every open
+00:02 +41 -1: T6#01 a cross-host redirect cannot rewrite the session cookie
+00:02 +41 -2: T6#01 a cross-host redirect cannot rewrite the session cookie [E]
+  Expected: 'SESSDATA=fake; bili_jct=csrf123'
+    Actual: 'SESSDATA=STOLEN_FROM_REDIRECT; bili_jct=csrf123'
+     Which: is different.
+            Expected: SESSDATA=fake; bili ...
+              Actual: SESSDATA=STOLEN_FRO ...
+                               ^
+             Differ at offset 9
+  跨主机 30x 与它之后的响应都不得写会话
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1320:7  main.<fn>
+  
+00:02 +41 -2: T6#02 a same-host 30x merges into the cookie the request carried
+00:02 +41 -3: T6#02 a same-host 30x merges into the cookie the request carried [E]
+  Expected: contains 'buvid3=FROM_REDIRECT'
+    Actual: 'SESSDATA=fake; bili_jct=csrf123'
+     Which: does not contain 'buvid3=FROM_REDIRECT'
+  同主机 30x 的 Set-Cookie 必须并入
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1340:7  main.<fn>
+  
+00:02 +41 -3: T6#03 -412 produces exactly one search request and no extra nav
+00:02 +41 -4: T6#03 -412 produces exactly one search request and no extra nav [E]
+  Expected: <1>
+    Actual: <2>
+  限流不重试：重试即加码
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1357:5  main.<fn>
+  
+00:02 +41 -4: T6#04 a transient signature failure still refreshes the salt once
+00:02 +42 -4: T6#05 positive HTTP codes are classified, not lumped into transient
+00:02 +42 -5: T6#05 positive HTTP codes are classified, not lumped into transient [E]
+  Expected: <403>
+    Actual: <null>
+  HTTP 403 应映射成 403
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1383:7  main.<fn>
+  
+00:02 +42 -5: T6#06 playlistSongs(charts[0].id) returns the chart, not a fav request
+00:02 +42 -6: T6#06 playlistSongs(charts[0].id) returns the chart, not a fav request [E]
+  Expected: a string starting with 'chart:'
+    Actual: 'rank:all'
+  id 必须带命名空间，否则和 media_id 混淆
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1395:5  main.<fn>
+  
+00:02 +42 -6: T6#07 charts() then playlistSongs() is one ranking request
+00:02 +43 -6: T6#08 a numeric media_id still takes the favourite branch
+00:02 +44 -6: T6#09 playlist rows carry writable and owner; default folder is favorites
+00:02 +44 -7: T6#09 playlist rows carry writable and owner; default folder is favorites [E]
+  Expected: true
+    Actual: <null>
+  list-all 返回的就是本人创建的夹子
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1426:7  main.<fn>
+  
+00:02 +44 -7: T6#10 host bucket simulation: created is non-empty, personal resolves
+00:02 +44 -8: T6#10 host bucket simulation: created is non-empty, personal resolves [E]
+  Expected: not null
+    Actual: <null>
+  personal 必须能解析出默认夹
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1446:5  main.<fn>
+  
+00:02 +44 -8: T6#09b addToPlaylist posts csrf and the target aid, exactly once
+00:02 +44 -9: T6#09b addToPlaylist posts csrf and the target aid, exactly once [E]
+  Expected: true
+    Actual: {'error': {'reason': 'Request failed', 'code': 501}}
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1470:5  main.<fn>
+  
+00:02 +44 -9: T6#09c addToPlaylist refuses 21 songs without sending a request
+00:02 +44 -10: T6#09c addToPlaylist refuses 21 songs without sending a request [E]
+  Expected: <400>
+    Actual: <null>
+  超出预算直接 param，不静默截断
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1484:5  main.<fn>
+  
+00:02 +44 -10: T6#09d createPlaylist returns an id playlistSongs can consume
+00:02 +44 -11: T6#09d createPlaylist returns an id playlistSongs can consume [E]
+  unexpected error: {reason: Request failed, code: 501}
+  package:matcher                                                   fail
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 565:5   _expectNoError
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1493:5  main.<fn>
+  
+00:02 +44 -11: T6#09e picker simulation: list -> add, and create -> add
+00:02 +44 -12: T6#09e picker simulation: list -> add, and create -> add [E]
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1515:5  main.<fn>
+  
+00:02 +44 -12: T6#09f addToPlaylist on a chart id is a param error, not a bad write
+00:02 +44 -13: T6#09f addToPlaylist on a chart id is a param error, not a bad write [E]
+  Expected: <400>
+    Actual: <null>
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1538:5  main.<fn>
+  
+00:02 +44 -13: T6#09g removeFromPlaylist stays unsupported (position vs aid mismatch)
+00:02 +45 -13: T6#11 comments(offset=1300) reaches the window instead of returning 0 rows
+00:02 +45 -14: T6#11 comments(offset=1300) reaches the window instead of returning 0 rows [E]
+  插件请求失败，请重试或更新插件。 (408)
+  dart:async                                                        _Completer.completeError
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 237:19   LuaPluginRuntime._start.<fn>
+  ===== asynchronous gap ===========================
+  dart:isolate                                                      _ReceivePortImpl.listen
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 163:10   LuaPluginRuntime._start
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 155:26   LuaPluginRuntime.start
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 595:14  main.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                        _CustomZone.registerUnaryCallback
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 586:11  main.<fn>
+  
+00:02 +45 -14: T6#12 comments(offset=3000, limit=100) returns 100 rows from 3001
+00:02 +45 -15: T6#12 comments(offset=3000, limit=100) returns 100 rows from 3001 [E]
+  插件请求失败，请重试或更新插件。 (408)
+  dart:async                                                        _Completer.completeError
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 237:19   LuaPluginRuntime._start.<fn>
+  ===== asynchronous gap ===========================
+  dart:isolate                                                      _ReceivePortImpl.listen
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 163:10   LuaPluginRuntime._start
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 155:26   LuaPluginRuntime.start
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 595:14  main.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                        _CustomZone.registerUnaryCallback
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 586:11  main.<fn>
+  
+00:02 +45 -15: T6#13 artistSongs degrades to an empty page when the endpoint is blocked
+00:02 +45 -16: T6#13 artistSongs degrades to an empty page when the endpoint is blocked [E]
+  Expected: true
+    Actual: <false>
+  接口被封锁时返回空页，不抛错（否则整页退化成 error 卡）
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1579:5  main.<fn>
+  
+00:02 +45 -16: T6#14 artistSongs still throws on a transient failure
+00:03 +46 -16: T6#14b comments keeps the reported total when the walk truncates
+00:03 +47 -16: T6#15 homeFeed.albums only carries multi-part videos, within budget
+00:03 +47 -17: T6#15 homeFeed.albums only carries multi-part videos, within budget [E]
+  Expected: <3>
+    Actual: <0>
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1634:5  main.<fn>
+  
+00:03 +47 -17: T6#16 albums() shares homeFeed.albums cache: second call is free
+00:03 +48 -17: T6#17 albumSongs gives every part its own cid, title and duration
+00:03 +49 -17: T6#18 song(unknown cid) is a 404 with no second request
+00:03 +49 -18: T6#18 song(unknown cid) is a 404 with no second request [E]
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1674:7  main.<fn>
+  
+00:03 +49 -18: T6#20 every declared capability has a real op, and vice versa
+00:03 +50 -18: T6#21 test manifest and src/manifest.json agree on capabilities
+00:03 +50 -19: T6#21 test manifest and src/manifest.json agree on capabilities [E]
+  Expected: Set:[
+              'search',
+              'playlists',
+              'favorites',
+              'lyrics',
+              'homeFeed',
+              'charts',
+              'recommendations',
+              'comments',
+              'album',
+              'albumSongs'
+            ]
+    Actual: Set:[
+              'search',
+              'playlists',
+              'favorites',
+              'lyrics',
+              'homeFeed',
+              'charts',
+              'recommendations',
+              'comments',
+              'album',
+              'albumSongs',
+              'browseAlbums'
+            ]
+     Which: larger than expected
+  D12：测试内嵌 manifest 曾停在 v0.1.0 且缺 album/*
+  
+  package:matcher                                                   expect
+  package:flutter_test/src/widget_tester.dart 473:18                expect
+  ..\..\..\bili-lazer-plugin\test\plugin_contract_test.dart 1724:5  main.<fn>
+  
+00:03 +50 -19: Some tests failed.
+
+Failing tests:
+  <plugin>/test/plugin_contract_test.dart: T6#01 a cross-host redirect cannot rewrite the session cookie
+  <plugin>/test/plugin_contract_test.dart: T6#02 a same-host 30x merges into the cookie the request carried
+  <plugin>/test/plugin_contract_test.dart: T6#03 -412 produces exactly one search request and no extra nav
+  <plugin>/test/plugin_contract_test.dart: T6#05 positive HTTP codes are classified, not lumped into transient
+  ... and 15 more

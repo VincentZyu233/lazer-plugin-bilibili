@@ -1,0 +1,26 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_popular_videos_test.dart
+00:00 +0: T8 live: popular rows videos distribution
+homeFeed albums type=_Map<String, Object?> keys=0
+popular bvid=BV1NvyYzeEbW videos=1
+popular bvid=BV1oRsu6XE2o videos=1
+popular bvid=BV11eyhzxEvr videos=1
+popular bvid=BV1A9y8z9Ehb videos=1
+popular bvid=BV1MMyazPEKy videos=1
+popular bvid=BV1BQyYzQEps videos=1
+popular bvid=BV1sDy8zdE8W videos=1
+popular bvid=BV15aytzcENP videos=1
+popular bvid=BV1sjyezvEYf videos=1
+popular bvid=BV1gGsv6EEBQ videos=1
+popular bvid=BV1cAyYzxEaT videos=1
+popular bvid=BV1nuyWz8E7t videos=1
+popular bvid=BV1jvypz9EPr videos=1
+popular bvid=BV1omyhz2EZk videos=1
+popular bvid=BV1rhyszPE6p videos=1
+popular bvid=BV1xfypzTEr3 videos=1
+popular bvid=BV1tdypzgEx2 videos=1
+popular bvid=BV1MvyWzkEVx videos=1
+popular bvid=BV13xyWzUE4k videos=1
+popular bvid=BV17Qs86jEAi videos=1
+popular rows=20 multiPart=0
+00:00 +1: All tests passed!

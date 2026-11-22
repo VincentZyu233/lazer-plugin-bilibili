@@ -1,0 +1,137 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/plugin_contract_test.dart
+00:00 +0: decode sources + describe
+00:00 +1: search maps titles/covers/durations, wbi signed
+00:00 +2: song returns detail with cid/extra
+00:00 +3: stream picks FLAC and carries Referer
+00:00 +4: lyrics builds synced lines[] from B站 ai-zh subtitle
+00:00 +5: session / cookie: loginCookie maps nav profile
+00:00 +6: playlists/favorites mark the default folder
+00:00 +7: setFavorite writes with csrf
+00:00 +8: homeFeed/charts/recommendations/comments shapes
+00:00 +9: artistSongs wbi signed with wts (UP 主页投稿，缺 wts 会 412)
+00:00 +10: artist / artistAlbums: UP 主页不再报 unsupported (资料加载失败)
+00:00 +11: QR generate -> URL -> poll 803 with set-cookie
+00:00 +12: budget gate: synced lines[] returned fast
+00:00 +13: budget gate: 100 songs map without instruction overflow
+00:00 +14: unknown operation returns structured error, no crash
+00:00 +15: T4#16 search leaves albums and playlists empty
+00:01 +16: T4#17 search artists carry UP row shape with albumCount 0
+00:01 +17: T4#18 artistSongs aggregates two pages into 100 rows at limit=100
+00:01 +18: T4#19 -412 maps to 429 throttle (T5: -352 moved to transient)
+00:01 +19: cover fix: playlist without own cover falls back to first video cover
+00:01 +20: T5#21 search(limit=100) is clamped to 35 rows, ids 1..35
+00:01 +21: T5#22 search(limit=100, offset=100) is rows 101..135, no overlap
+00:01 +22: T5#23 comments follow host offset arithmetic on short pages
+00:01 +23: T5#24 playlists slices list-all locally: 150 folders -> 100/50/0
+00:01 +24: T5#25a short page mid-offset returns 20 rows starting at global 16
+00:01 +25: T5#25b a short page in the middle does not truncate the listing
+00:01 +26: T5#26 parse_duration accumulates HH:MM:SS segments
+00:01 +27: T5#26b rows without bvid are dropped, never emitted as id=""
+00:01 +28: T5#27 -400 -> 400 (not 401), -412 -> 429, -352 -> 70 with no status
+00:01 +29: T5#27b unsupported op -> code 501, not an auth failure
+00:01 +30: T5#28 wbi signs with a SECONDS wts and a 32-char salt
+00:01 +31: T5#29 a rejected signature refreshes the salt exactly once
+00:01 +32: T5#30 a failed favorite write is never replayed
+00:01 +33: T5#31 a 4-hop redirect chain stops at 3 and reports transient
+00:01 +34: T5#32 a cross-host redirect drops the session cookie
+00:01 +35: T5#33 song(bvid:cid) resolves that part; plain bvid keeps the old id
+00:01 +36: T5#34 stream(bvid:cid) requests that cid and never the first part
+00:01 +37: T5#35 lyrics(bvid:cid) reads that part, not the first one
+00:02 +38: T5#36 albumSongs returns one row per part, each with its own cid
+00:02 +39: T5#36b a plain bvid still resolves the same track as before
+00:02 +40: T5#44 cover backfill is budgeted and cached across opens
+00:02 +41: T5#44b an empty folder is cached as empty, not retried every open
+00:02 +42: T6#01 a cross-host redirect cannot rewrite the session cookie
+00:02 +43: T6#02 a same-host 30x merges into the cookie the request carried
+00:02 +44: T6#03 -412 produces exactly one search request and no extra nav
+00:02 +45: T6#04 a transient signature failure still refreshes the salt once
+00:02 +46: T6#05 positive HTTP codes are classified, not lumped into transient
+00:02 +47: T6#06 playlistSongs(charts[0].id) returns the chart, not a fav request
+00:02 +48: T6#07 charts() then playlistSongs() is one ranking request
+00:02 +49: T6#08 a numeric media_id still takes the favourite branch
+00:02 +50: T6#09 playlist rows carry writable and owner; default folder is favorites
+00:02 +51: T6#10 host bucket simulation: created is non-empty, personal resolves
+00:02 +52: T6#09b addToPlaylist posts csrf and the target aid, exactly once
+00:02 +53: T6#09c addToPlaylist refuses 21 songs without sending a request
+00:02 +54: T6#09d createPlaylist returns an id playlistSongs can consume
+00:02 +55: T6#09e picker simulation: list -> add, and create -> add
+00:02 +56: T6#09f addToPlaylist on a chart id is a param error, not a bad write
+00:02 +57: T6#09h createPlaylist invalidates the cached folder listing
+00:02 +58: T6#09i addToPlaylist deduplicates repeated bvids into one aid
+00:02 +59: T6#09g removeFromPlaylist stays unsupported (position vs aid mismatch)
+00:02 +60: T6#11 comments(offset=1300) reaches the window instead of returning 0 rows
+00:02 +61: T6#12 comments(offset=3000, limit=100) returns 100 rows from 3001
+00:02 +62: T6#13 artistSongs degrades to an empty page when the endpoint is blocked
+00:02 +63: T6#14 artistSongs still throws on a transient failure
+00:02 +64: T6#14b comments keeps the reported total when the walk truncates
+00:02 +65: T6#15 homeFeed.albums only carries multi-part videos, within budget
+00:02 +66: T6#16 homeFeed and albums() share one wide shelf cache
+00:03 +67: T6#17 albumSongs gives every part its own cid, title and duration
+00:03 +68: T6#18 song(unknown cid) is a 404 with no second request
+00:03 +69: T6#20 every declared capability has a real op, and vice versa
+00:03 +70: T6#21 test manifest and src/manifest.json agree on capabilities
+00:03 +71: T6#19 lyrics with no subtitle and no lrclib hit stays retryable
+00:03 +72: T6#19b lyrics network failure is also 70, with no leaked detail
+00:03 +73: T7#01 ranking/popular fixtures carry the cid, videos and aid the wire has
+00:03 +74: T7#02 the rebuilt ranking fixture makes chart ids carry a colon
+00:03 +75: T7#04 the rebuilt fixtures change real behaviour, not just bytes
+00:03 +76: T7#05 setFavorite(bvid:cid) sends the plain bvid, never a %3A
+00:03 +77: T7#06 comments(bvid:cid) resolves the video and pages normally
+00:03 +78: T7#07 one bvid:cid id is accepted by all six song paths
+00:03 +79: T7#08 a plain bvid still behaves exactly as before on both write paths
+00:03 +80: T7#08b a malformed song id is a param error, not a 400 from the wire
+00:03 +81: T7#10 a deep folder window is never a silent short page
+00:03 +82: T7#11 a folder offset past the budget is an error, never zero rows
+00:03 +83: T7#12 artistSongs(offset=800) is a retryable error, not a 408
+00:03 +84: T7#12b artistSongs(offset=400) still answers inside the signed budget
+00:03 +85: T7#13 comment seek still costs one request per call
+00:03 +86: T7#13b a full page is never turned into an error by the budget
+00:03 +87: T8#01 the same cursor key answers 86 rows twice
+00:03 +88: T8#02 a deep window still reads after the end was probed
+00:04 +89: T8#03 a small folder is immune to the same probe
+00:04 +90: T8#05 opening a folder does not poison favorites
+00:04 +91: T9#12 hot and latest carry the same comment shape
+00:04 +92: T9#13 latest comes from sort=0 and hot from sort=1
+00:04 +93: T9#14 latest is time-ordered while hot is like-ordered
+00:04 +94: T9#15 a failed hot bucket never breaks latest, and is retried
+00:04 +95: T9#16 hot is fetched on the first page only
+00:04 +96: T9#17 total/hasMore only describe the latest bucket
+00:04 +97: T9#18 a non-empty page with no count does not latch the cursor
+00:04 +98: T9#19 a non-empty page reporting count=0 does not latch the cursor
+00:04 +99: T9#21 an out-of-range page still never invents a total
+00:04 +100: T9#27 the page-length contract is load-bearing (30-row clamp turns it red)
+00:04 +101: T8#06 comments never report the request offset as the total
+00:04 +102: T8#07 a real upstream total still closes hasMore at the right offset
+00:04 +103: T8#09 fixture pastEnd is load-bearing: keepsTotal makes T8#01 red
+00:04 +104: T8#13 search(limit=100) clamps to 35 instead of a 408
+00:04 +105: T8#14 search(limit=35) is unchanged and not marked truncated
+00:04 +106: T8#15 the default host call (limit=30) stays cheap on wire rows
+00:04 +107: T8#16 homeFeed spends view requests only on multi-part rows
+00:04 +108: T8#17 a feed with no multi-part row costs zero view requests
+00:04 +109: T8#18 albums() reads the chart rows, not the mapped song rows
+00:04 +110: T8#19 albumSongs returns a full page instead of clamping to 30
+00:04 +111: T8#20 albumSongs(limit=30) is unchanged
+00:05 +112: T8#21 albumSongs(offset=30) continues from the 31st part, no overlap
+00:05 +113: T9#01 albumSongs(limit=100) on a 63-part video returns all 63 rows
+00:05 +114: T9#01b a part with an empty cid is filtered before slicing, not after
+00:05 +115: T9#02 host all() reaches every part of a 150-part video
+00:05 +116: T9#03 host all() reaches every part of a 300-part video
+00:05 +117: T9#05 albumSongs(limit=30) is a full page and asks for more
+00:05 +118: T9#07 every limit step returns min(limit, remaining)
+00:05 +119: T9#08 a 160-part video answers a full 100-row page
+00:05 +120: T9#09 300/800/1200-part videos each answer a full page
+00:05 +121: T9#10 a single-part video keeps clean_title(title) as its row title
+00:05 +122: T9#11 multi-part titles stay P<n> <part>
+00:05 +123: T10#01 homeFeed.albums carries the ranking multi-part rows
+00:05 +124: T10#03 a bvid present in both sources yields one album and one view
+00:05 +125: T10#04 two all-single-part sources cost zero view and an empty shelf
+00:05 +126: T10#05 a ranking failure degrades to popular instead of failing the page
+00:05 +127: T10#06 a failed ranking is retried on the next homeFeed
+00:05 +128: T10#07 a degraded result never occupies the shared wide cache
+00:05 +129: T10#08 albums() after a successful homeFeed costs no new request
+00:05 +130: T10#09 homeFeed after a successful albums() costs no new request
+00:05 +131: T10#10 a 100-row all-multi-part chart stays inside ALBUM_LIMIT
+00:05 +132: T10#11 one failing view keeps the rest of the shelf
+00:05 +133: T10#12 albums() still surfaces a ranking failure instead of degrading
+00:06 +134: All tests passed!

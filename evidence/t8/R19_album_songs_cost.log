@@ -1,0 +1,10 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_album_songs_cost_test.dart
+00:00 +0: T8 live: albumSongs cost on a large multi-part video
+shelf albums=4
+picked bvid=BV1NDsS6UE8D songCount=63
+albumSongs limit=10 -> rows=10 (lastViewBytes=22751)
+albumSongs limit=30 -> rows=30 (lastViewBytes=22751)
+albumSongs limit=63 -> 408 (lastViewBytes=22751)
+albumSongs limit=100 -> 408 (lastViewBytes=22751)
+00:02 +1: All tests passed!

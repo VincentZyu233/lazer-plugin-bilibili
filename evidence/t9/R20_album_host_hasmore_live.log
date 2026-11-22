@@ -1,0 +1,10 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t9_review_live_test.dart
+00:00 +0: T9 live: albumSongs clamp vs host hasMore
+album songCount=63 title=【侠盗猎车手6】4K 最高画质 全网首发 全任务 全剧情流程通关攻略 开放世界冒险游戏 GTA6 - Grand Theft Auto VI
+albumSongs(limit=100, offset=0) -> rows=30
+host _page hasMore = 30 >= 100 -> false
+host all() stops here: true
+albumSongs(limit=100, offset=30) -> rows=30 first=BV1NDsS6UE8D:43741742756
+album parts on the wire = 63, reachable by the host = 30
+00:01 +1: All tests passed!

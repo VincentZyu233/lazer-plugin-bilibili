@@ -24,6 +24,9 @@ Thumbs.db
 AGENTS.local.md
 *.local.md
 
+# 例外：evidence/ 下是文档与注释里引用的实测读数，必须入库
+!evidence/**/*.log
+
 # 编辑器
 .vscode/
 .idea/

@@ -1,0 +1,12 @@
+# T11 证据：artistSongs(limit=100) 成本分解（真实两页响应）
+# 命令: BILI_SRC=evidence/t11/src_variant_no_fastpath flutter test "<...>/test/probe_t11_breakdown_test.dart"
+# 变体 no_fastpath = src/ 去掉 util.clean_title 的快速返回路径（其余逐字相同）
+# 度量: mapCap = 允许映射的行数（解码始终完整两页），二分找最大可通过值
+# baseline      = no_fastpath，即 v0.4.2 的等价代码
+# clean_title_fast = 在 no_fastpath 上把快路径加回去
+
+MAXROWS baseline = 85 / 100
+MAXROWS clean_title_fast = 100 / 100
+MAXROWS no_duration = 95 / 100
+MAXROWS no_artist = 100 / 100
+00:01 +1: All tests passed!

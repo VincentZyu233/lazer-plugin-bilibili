@@ -1,0 +1,15 @@
+# T11 负向控制：去掉 util.clean_title 快路径后 T11 断言必须变红
+# 变体: evidence/t11/src_variant_no_fastpath（src/ 去掉快路径，其余逐字相同）
+# 命令: BILI_SRC=<no_fastpath> flutter test evidence/t11/contract_env_src.dart
+
+期望：T11#01 / T11#02 变红（limit=100 重新 408），T11#03 仍绿（语义断言不依赖成本）。
+实测：
+  00:07 +134: T11#01 ... 
+  00:07 +134 -1: T11#01 [E]
+  00:07 +134 -1: T11#02 ...
+  00:08 +134 -2: T11#02 [E]
+  00:08 +134 -2: T11#03 ...
+  00:08 +135 -2: Some tests failed.
+  Failing: T11#01, T11#02 —— 与期望一致。
+
+对照（同一文件跑 src/）：137/137 All tests passed。

@@ -1,0 +1,10 @@
+# T11 基线：用真机原样两页响应复现 artistSongs(limit=100) 的 408
+# 变体: evidence/t11/src_variant_no_fastpath（等价 v0.4.2）
+# 命令: BILI_SRC=<no_fastpath> flutter test test/probe_t11_artist_cost_test.dart
+
+fresh VM artistSongs(limit=20,  offset=0) -> rows=20 (106 ms, arcPages=1)
+fresh VM artistSongs(limit=50,  offset=0) -> rows=50 ( 48 ms, arcPages=0)
+fresh VM artistSongs(limit=100, offset=0) -> THREW 插件请求失败，请重试或更新插件。 (408) (61 ms, arcPages=1)
+fresh VM artistSongs(limit=100, offset=100) -> THREW ... (408) (136 ms, arcPages=4)
+
+结论：两页响应均 code=0 且已成功解码，408 发生在插件本地映射阶段。

@@ -27,7 +27,7 @@ local M = {}
 -- only; a seek that skipped pages proves nothing about them). The two are kept
 -- apart because collapsing them is what made an 88-song folder open empty:
 -- /x/v3/fav/resource/list answers pn past the end with `medias: []` AND
--- `info.media_count: 0` (measured live, 实测记录 R1_out_of_range), so the
+-- `info.media_count: 0` (measured live, evidence/t8/R1_out_of_range.log), so the
 -- out-of-range probe overwrote the real 88 with 0 and every later call on the
 -- same key returned at `skip >= known` without sending one request.
 local cursors = {}
@@ -47,7 +47,7 @@ local MIN_PAGES = 64
 --
 --   plaintext (reply / fav_resource / popular / ranking / view / player):
 --     the host kills the call somewhere between 153 and 232 requests depending
---     on row size (实测记录 R5_host_ceiling_offline — four offsets, each
+--     on row size (evidence/t8/R5_host_ceiling_offline.log — four offsets, each
 --     reporting `callsThisRound` at the moment of the 408). 32 leaves a 4x
 --     margin, which is what keeps a pathological cursor from exhausting the
 --     host instead of returning.
@@ -156,7 +156,7 @@ end
 -- really slices by position: every page is exactly `cap` rows, adjacent pages
 -- never overlap. Only /x/v2/reply qualifies (measured live 2026-11-21:
 -- pn=1/2/3/4/5/10/20/33/66 all returned exactly 20 rows with zero duplicate
--- rpids across pages, 实测记录 probe_reply_pages). A folder page is NOT
+-- rpids across pages, evidence/t6/probe_reply_pages.txt). A folder page is NOT
 -- strict — ps=40 returned 38 rows and ps=20 returned 19 — so seeking there
 -- would land on the wrong row.
 --
@@ -198,7 +198,7 @@ function M.walk(key, load, limit, offset, max_hops, total, opts)
   -- PLAINTEXT_BUDGET / SIGNED_BUDGET requests per invocation — so a deep offset
   -- reached page by page runs out of budget before it reaches its window (the
   -- pre-T7 code died exactly that way on comments(offset=1300) and
-  -- comments(offset=3000); 实测记录 G0_old_code_red).
+  -- comments(offset=3000); evidence/t6/G0_old_code_red.log).
   -- With a strict family the page that holds `skip` is known outright: page N
   -- covers rows (N-1)*cap+1 .. N*cap, so it can be requested directly and the
   -- skipped pages never cost a request. The starting page is the LOWEST page
@@ -233,7 +233,7 @@ function M.walk(key, load, limit, offset, max_hops, total, opts)
       if n == 0 then
         -- An empty page proves the END, not the SIZE. /x/v3/fav/resource/list
         -- answers pn past the last row with `medias: []` and `info.media_count: 0`
-        -- (实测记录 R1_out_of_range), so any total this page reports is
+        -- (evidence/t8/R1_out_of_range.log), so any total this page reports is
         -- discarded — it carries no information about how many rows exist, and
         -- writing it back made a 88-song folder answer "empty" forever.
         cursor.complete = true
@@ -247,7 +247,7 @@ function M.walk(key, load, limit, offset, max_hops, total, opts)
       -- reporting `count: 0` is contradictory, and writing that 0 makes
       -- `skip >= cursor.total` true on every later call — one count-less
       -- response froze a thread at its first page forever
-      -- (实测记录 R3_comments_latch). Loaders may pass nil themselves;
+      -- (evidence/t9/R3_comments_latch.log). Loaders may pass nil themselves;
       -- this is the second line so a new caller cannot reintroduce it.
       if page_total ~= nil then
         local reported = util.opt_number(page_total)

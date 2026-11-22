@@ -1,0 +1,41 @@
+[popular] status=200 code=0 rows=20
+  row0 keys (37): aid,videos,tid,tname,copyright,pic,title,pubdate,ctime,desc,state,duration,rights,owner,stat,dynamic,cid,dimension,season_id,short_link_v2,first_frame,pub_location,cover43,tidv2,tnamev2,pid_v2,pid_name_v2,attribute_v3,current_state,global_state,bvid,season_type,is_ogv,ogv_info,enable_vt,ai_rcmd,rcmd_reason
+  videos present: 20/20
+  cid present:    20/20
+  aid present:    20/20
+  row0 videos=1 cid=43796138011 aid=117654018855263 bvid=BV11eyhzxEvr
+
+[ranking] status=200 code=0 rows=100
+  row0 keys (34): aid,videos,tid,tname,copyright,pic,title,pubdate,ctime,desc,state,duration,mission_id,rights,owner,stat,dynamic,cid,dimension,season_id,short_link_v2,first_frame,pub_location,cover43,tidv2,tnamev2,pid_v2,pid_name_v2,attribute_v3,current_state,global_state,bvid,score,enable_vt
+  videos present: 100/100
+  cid present:    100/100
+  aid present:    100/100
+  multi-part (videos>1): 4
+    BV1NDsS6UE8D videos=60 cid=43721230307 title=【侠盗猎车手6】4K 最高画质 全网首发 全任务 全剧情流程
+    BV1AosS6yEX9 videos=24 cid=43722279775 title=【更新至24P】老戴《侠盗猎车手 6》初见开荒全实况流程解说
+    BV1nuyWz8Eji videos=4 cid=43764744466 title=《绝区零》3.4版本PV | 长日终尽
+    BV142sS6HEyv videos=2 cid=43712449853 title=大牙|| 肖8选择题精讲带背（第二套卷），全网讲解最清晰，专
+
+[related] seed=BV11eyhzxEvr status=200 code=0 rows=40
+  row0 keys (37): aid,videos,tid,tname,copyright,pic,title,pubdate,ctime,desc,state,duration,rights,owner,stat,dynamic,cid,dimension,season_id,short_link_v2,first_frame,pub_location,cover43,tidv2,tnamev2,pid_v2,pid_name_v2,attribute_v3,current_state,global_state,bvid,season_type,is_ogv,ogv_info,rcmd_reason,enable_vt,ai_rcmd
+  cid present: 40/40
+  videos present: 40/40
+
+[list-all] status=200 code=0 folders=7
+  row0 keys: id,fid,mid,attr,title,fav_state,media_count,is_kid_playlist,kid_playlist_desc
+  default folder: id=7100001 title=默认收藏夹 media_count=88
+[fav_resource] status=200 code=0 rows=19
+  row0 keys (20): id,type,title,cover,intro,page,duration,upper,attr,cnt_info,link,ctime,pubtime,fav_time,bv_id,bvid,season,ogv,ugc,media_list_link
+  cid present: 0/19
+  videos present: 0/19
+  aid present: 0/19
+
+[view] bvid=BV11eyhzxEvr status=200 code=0
+  data keys: bvid,aid,videos,tid,tid_v2,tname,tname_v2,copyright,pic,title,pubdate,ctime,desc,desc_v2,state,duration,rights,owner,stat,argue_info,dynamic,cid,dimension,season_id,premiere,teenage_mode,is_chargeable_season,is_story,is_upower_exclusive,is_upower_play,is_upower_preview,enable_vt,vt_display,is_upower_exclusive_with_qa,is_hua_sheng,no_cache,pages,subtitle,label,ugc_season,is_season_display,user_garb,honor_reply,like_icon,need_jump_bv,disable_show_up_info,is_story_play,is_view_self
+  pages[0] keys: cid,page,from,part,duration,vid,weblink,dimension,first_frame,ctime,asr_language
+
+[search] status=200 code=0 rows=20
+  row0 keys (66): type,id,author,mid,typeid,typename,arcurl,aid,bvid,title,description,pic,play,video_review,favorites,tag,review,pubdate,senddate,duration,badgepay,hit_columns,view_type,is_pay,is_union_video,rec_tags,new_rec_tags,like,upic,corner,cover,desc,url,rec_reason,danmaku,biz_data,is_charge_video,vt,enable_vt,vt_display,subtitle,episode_count_text,release_status,is_intervene,area,style,cate_name,is_live_room_inline,live_status,live_time,online,rank_index,rank_offset,roomid,short_id,spread_id,tags,uface,uid,uname,user_cover,parent_area_id,parent_area_name,watched_show,cny_flag,card_status
+  cid present: 0/20
+  videos present: 0/20
+  aid present: 20/20

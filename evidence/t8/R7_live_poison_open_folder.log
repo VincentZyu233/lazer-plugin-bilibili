@@ -1,0 +1,13 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_live_poison_test.dart
+00:00 +0: T8 live: default folder / favorites go empty after one full walk
+01 playlists -> List(6)
+02 favorites (first) -> List(86)
+03 playlistSongs(default, offset=0) -> EMPTY
+04 favorites (after folder open) -> EMPTY
+05 playlistSongs(default, offset=0) again -> EMPTY
+06 playlistSongs(default, offset=80) -> EMPTY
+07 playlistSongs(small folder) -> List(12)
+08 playlistSongs(small folder) again -> EMPTY
+09 playlistSongs(default, offset=0) after reset-less -> EMPTY
+00:03 +1: All tests passed!

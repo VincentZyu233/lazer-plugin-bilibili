@@ -1,0 +1,10 @@
+bvid= BV1GJ411x7h7 aid= 80433022
+[pn=1] code=0 rows=20 count=241755 first=3760801399 last=3935797822 dupWithEarlierPages=0
+[pn=2] code=0 rows=20 count=241755 first=143475134160 last=3568858658 dupWithEarlierPages=0
+[pn=3] code=0 rows=20 count=241755 first=4257152856 last=3554553703 dupWithEarlierPages=0
+[pn=4] code=0 rows=20 count=241755 first=3661257854 last=5505364522 dupWithEarlierPages=0
+[pn=5] code=0 rows=20 count=241755 first=3846093399 last=3992121869 dupWithEarlierPages=0
+[pn=10] code=0 rows=20 count=241755 first=214548068576 last=163502912224 dupWithEarlierPages=0
+[pn=20] code=0 rows=20 count=241755 first=125752325360 last=100871942192 dupWithEarlierPages=0
+[pn=33] code=0 rows=20 count=241755 first=95359416032 last=323142362736 dupWithEarlierPages=0
+[pn=66] code=0 rows=20 count=241755 first=294836925009 last=250480562145 dupWithEarlierPages=0

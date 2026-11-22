@@ -78,7 +78,7 @@ end
 --
 --   40 rows per bucket (80 total) -> answers
 --   50 rows per bucket (100 total) -> 408, at any `limit`, including limit=1
---   (实测记录 R17_search_decode_cliff)
+--   (evidence/t8/R17_search_decode_cliff.log)
 --
 -- That is why the old `cap = 50` was the real defect behind T8/D3: a limit the
 -- caller could never receive, because the page it had to decode first was
@@ -86,7 +86,7 @@ end
 -- 70 decoded rows — under the measured 80-row boundary with margin.
 --
 -- Live, both buckets populated, the same op answers limit=40 and 408s at 45
--- (实测记录 R13_search_live_fine, R14_search_live_swing.log), so 35 also
+-- (evidence/t8/R13_search_live_fine.log, R14_search_live_swing.log), so 35 also
 -- keeps a margin under the live edge rather than sitting on it.
 --
 -- The response is clamped instead of failing: the host derives `hasMore` from
@@ -118,7 +118,7 @@ function M.search(query, limit, offset)
   --
   -- SIGNED family: /x/web-interface/wbi/search/type is wbi-signed, so it shares
   -- the 12-request ceiling with space/arc rather than the plaintext 32
-  -- (实测记录 R2_artist_budget).
+  -- (evidence/t7/R2_artist_budget.log).
   local songs = pager.walk("search:video:" .. keyword, function(pn)
     local body = wbi.get("/x/web-interface/wbi/search/type", {
       search_type = "video", keyword = keyword, page = pn, page_size = cap,
@@ -214,14 +214,14 @@ end
 -- again with `offset += rows.length`, so a full page is simply the next page
 -- while a short one is a permanent dead end — a 30-row clamp on a 62-part
 -- album made every part past the 30th unreachable
--- (实测记录 R20_album_host_hasmore_live).
+-- (evidence/t9/R20_album_host_hasmore_live.log).
 --
 -- The ceiling exists because the whole op runs under one instruction budget and
 -- the cost is per ROW MAPPED, not per request: returning every part of a 62-part
 -- video answered 408 and the album opened as an error card
--- (实测记录 R19_album_songs_cost). Hoisting the per-video work out of
+-- (evidence/t8/R19_album_songs_cost.log). Hoisting the per-video work out of
 -- the row loop moved that wall past 160 rows offline
--- (实测记录 R16_offline_cliff_hoist); 100 keeps a wide margin under it
+-- (evidence/t9/R16_offline_cliff_hoist.log); 100 keeps a wide margin under it
 -- and is exactly the page size the host already asks for.
 local ALBUM_SONG_CEILING = 100
 
@@ -488,7 +488,7 @@ end
 -- T8/T03: the album shelf asks the chart for multi-part rows, and the mapped
 -- `song` shape has no `videos` — `song_rows` projects only id/title/artist/
 -- cover/duration, so `util.number(item.videos, 0)` was always 0 and the shelf
--- stayed empty on the live host (实测记录 G8_homefeed_cost_after:
+-- stayed empty on the live host (evidence/t8/G8_homefeed_cost_after.log:
 -- `albums(18) {} newRequests=1`). Cache the wire rows and map per caller.
 local function chart_raw(rid)
   local cached = chart_get(rid)
@@ -640,7 +640,7 @@ function M.add_to_playlist(playlist, songs)
   -- a replay of this write would add the same item twice.
   --
   -- The write is asynchronous on Bili's side: measured 2026-11-21
-  -- (实测记录 G12e_deal_delay), a song added to a folder created seconds
+  -- (evidence/t6/G12e_deal_delay.log), a song added to a folder created seconds
   -- earlier is invisible to fav/resource/list for ~1.5 s. Dropping the cursor
   -- is still correct — it makes the NEXT read fetch fresh rows — but a caller
   -- that reads immediately may see the pre-write list. That is Bili's
@@ -649,7 +649,7 @@ function M.add_to_playlist(playlist, songs)
   return true
 end
 
--- `/x/v3/fav/folder/add` probed live 2026-11-21 (实测记录 G12_folder_add):
+-- `/x/v3/fav/folder/add` probed live 2026-11-21 (evidence/t6/G12_folder_add.log):
 -- form `title` + `privacy` (0 = public) + `csrf`, answer `{code:0, data:{id}}`
 -- where `data.id` is the media_id `playlistSongs` consumes. The probe folder was
 -- deleted again in the same run, so the account is back to its six folders.
@@ -826,15 +826,15 @@ end
 --   popular  — the list `featuredSongs` comes from.
 --   ranking  — the only source with multi-part rows on the wire: measured live,
 --              all 20 popular rows are single-part
---              (实测记录 R18_popular_videos), so a popular-only shelf is
+--              (evidence/t8/R18_popular_videos.log), so a popular-only shelf is
 --              permanently empty.
 --
 -- T10/D2: folding the chart in used to blow the 250k instruction budget
 -- (`homeFeed THREW 408`). The cause was never the chart's size, it was MAPPING
 -- it: `chart_rows` turns 100 rows into song shapes (no `videos` left, and 100
 -- decoded rows is what the budget is spent on) —
--- 实测记录 R25_homefeed_chart_mapped.log. Reading the RAW rows costs 6
--- requests and returns albums fine — 实测记录 R27_homefeed_chart_raw.log.
+-- evidence/t9/R25_homefeed_chart_mapped.log. Reading the RAW rows costs 6
+-- requests and returns albums fine — evidence/t9/R27_homefeed_chart_raw.log.
 --
 -- `allow_degrade` guards the chart request alone. Popular is the home page's
 -- main content, so its failure must still surface; anything else (a bad row
@@ -981,13 +981,13 @@ function M.comments(id, limit, offset)
   -- it happened to read, so a truncated walk reported itself as complete.
   local total = nil
   -- strict_seek: reply pages really are position slices (20 rows each, no
-  -- overlap across pn=1/2/3/4/5/10/20/33/66 — 实测记录 probe_reply_pages),
+  -- overlap across pn=1/2/3/4/5/10/20/33/66 — evidence/t6/probe_reply_pages.txt),
   -- so a deep offset can jump straight to its page instead of walking there and
   -- running out of the per-call request budget (bili/pager.lua PLAINTEXT_BUDGET).
   --
   -- `sort=0` is TIME order. Measured live: sort=0 sums to 32 likes across the
   -- page while sort=1 and sort=2 both sum to 2 793 193 — i.e. the old `sort=2`
-  -- was the hot list wearing the "latest" name (实测记录 R29_reply_sort_live).
+  -- was the hot list wearing the "latest" name (evidence/t9/R29_reply_sort_live.log).
   local replies, _, truncated = pager.walk("reply:" .. tostring(aid), function(pn)
     local body = http.get("/x/v2/reply", {
       type = 1, oid = aid, pn = pn, ps = cap, sort = 0,
@@ -998,7 +998,7 @@ function M.comments(id, limit, offset)
     -- A page WITH rows that reports 0 (or nothing) says nothing about the size.
     -- Writing that 0 as the total made `skip >= total` true from then on, so one
     -- count-less response froze the thread at its first page forever
-    -- (实测记录 R3_comments_latch). Unknown stays unknown.
+    -- (evidence/t9/R3_comments_latch.log). Unknown stays unknown.
     local reported = (count > 0) and count or nil
     if reported ~= nil then total = reported end
     return util.map_rows(util.list(data.replies), models.comment), reported
@@ -1008,7 +1008,7 @@ function M.comments(id, limit, offset)
   -- never part of the walk, never part of `total`/`hasMore`. Requesting it on
   -- every page of `latest` would pay the same 20 rows again for a list the
   -- client already holds, and its ordering shifts with likes, so paging it
-  -- would duplicate and skip rows (实测记录 R19_reply_sort_pages).
+  -- would duplicate and skip rows (evidence/t9/R19_reply_sort_pages.log).
   local hot = {}
   if skip == 0 then
     -- Failure here must not touch `latest`: a blocked or rate-limited hot list
@@ -1025,7 +1025,7 @@ function M.comments(id, limit, offset)
   -- The endpoint's count is the ONLY source of `total`. `skip + #replies` used
   -- to stand in for it, which is the request offset wearing the total's name:
   -- comments(offset=1000) answered `total=1000` for a thread of 60
-  -- (实测记录 R9_past_end_offline) and the panel then said "1000 条" with
+  -- (evidence/t8/R9_past_end_offline.log) and the panel then said "1000 条" with
   -- nothing to load. A count the endpoint never sent stays unknown: the host
   -- reads a missing `total` as 0 (SongCommentPage.fromJson), which is the honest
   -- "we do not know" and never a fabricated deep number.

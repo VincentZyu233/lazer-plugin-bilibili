@@ -1,0 +1,23 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t9_comments_latch_test.dart
+00:00 +0: T9 offline: comments offset paging, page.count present=true
+count-present=true  offset0 n=20 total=60 more=true
+                  offset20 n=20 total=60 more=true
+                  offset40 n=20 replyCalls=3
+00:00 +1: T9 offline: comments offset paging, page.count present=false
+count-present=false  offset0 n=20 total=null more=false
+                  offset20 n=0 total=null more=false
+                  offset40 n=0 replyCalls=1
+00:00 +1 -1: T9 offline: comments offset paging, page.count present=false [E]
+  Expected: <20>
+    Actual: <0>
+  T9：缺 count 的非空页会把 total 写成 0，第二次起永久空表
+  
+  package:matcher                                                          expect
+  package:flutter_test/src/widget_tester.dart 473:18                       expect
+  ..\..\..\bili-lazer-plugin\test\probe_t9_comments_latch_test.dart 126:9  main.<fn>
+  
+00:00 +1 -1: Some tests failed.
+
+Failing tests:
+  <plugin>/test/probe_t9_comments_latch_test.dart: T9 offline: comments offset paging, page.count present=false

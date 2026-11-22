@@ -1,0 +1,14 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t8_host_ceiling_test.dart
+00:00 +0: T8 offline: real per-call request ceiling, plaintext and signed
+playlistSongs offset=6000 callsThisRound=153 total=153 -> THREW 插件请求失败，请重试或更新插件。 (408)
+playlistSongs offset=10000 callsThisRound=232 total=385 -> THREW 插件请求失败，请重试或更新插件。 (408)
+playlistSongs offset=14000 callsThisRound=232 total=617 -> THREW 插件请求失败，请重试或更新插件。 (408)
+playlistSongs offset=18000 callsThisRound=232 total=849 -> THREW 插件请求失败，请重试或更新插件。 (408)
+playlistSongs offset=20000 callsThisRound=232 total=1081 -> THREW 插件请求失败，请重试或更新插件。 (408)
+artistSongs offset=1000 callsThisRound=22 total=22 -> THREW 插件请求失败，请重试或更新插件。 (408)
+artistSongs offset=2000 callsThisRound=42 total=64 -> THREW 插件请求失败，请重试或更新插件。 (408)
+artistSongs offset=3000 callsThisRound=62 total=126 -> THREW 插件请求失败，请重试或更新插件。 (408)
+artistSongs offset=4000 callsThisRound=75 total=201 -> THREW 插件请求失败，请重试或更新插件。 (408)
+artistSongs offset=5000 callsThisRound=75 total=276 -> THREW 插件请求失败，请重试或更新插件。 (408)
+00:01 +1: All tests passed!

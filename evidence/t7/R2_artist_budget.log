@@ -1,0 +1,17 @@
+# T7 探针：signature-family request budget (WBI-signed /x/space/wbi/arc/search)
+# 命令: flutter test test/probe_t7_artist_budget_test.dart
+# 每轮全新 VM；fixture 4000 条投稿、cap=50、limit=100
+
+offset=600 started
+offset=600 arcCalls=14 rows=100 hostHasMore=true first=BVarc000601
+offset=800 started
+00:00 +0 -1: Some tests failed.
+  插件请求失败，请重试或更新插件。 (408)
+  package:lazer_nextgen/plugins/lua_plugin_runtime_io.dart 237:19  LuaPluginRuntime._start.<fn>
+
+# 结论：
+#   * 明文族（reply）40 次才撞 408（T6 实测）；
+#   * 签名族（wbi arc/search）arcCalls=14 成功；下一档 offset=800 需要走 17 页，
+#     未及打印 arcCalls 就抛 408（异常直接冒泡，探针回调未捕获），
+#     所以可靠上限落在 14~16 之间。
+#   REQUEST_BUDGET=32 对签名族过高；v0.4.0 分族预算取 12。

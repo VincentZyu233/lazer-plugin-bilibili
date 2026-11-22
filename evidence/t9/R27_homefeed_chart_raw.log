@@ -1,0 +1,6 @@
+Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+00:00 +0: loading <plugin>/test/probe_t9_homefeed_budget_test.dart
+00:00 +0: T9 live: homeFeed with a multi-page popular list
+RAW keys=[albums, featuredSongs]
+homeFeed OK 1295 ms songs=20 albums=3 requests=6 [/x/frontend/finger/spi, /x/web-interface/popular, /x/web-interface/ranking/v2, /x/web-interface/view]
+00:01 +1: All tests passed!

@@ -1,0 +1,9 @@
+newId= 4811037950 aid= 80433022
+[deal immediately] {"code":0,"message":"OK","ttl":1,"data":{"prompt":true,"ga_data":null,"toast_msg":"","success_num":0}}
+  +0ms medias=undefined count=0 code=0
+  +1500ms medias=1 count=1 code=0
+  +3000ms medias=1 count=1 code=0
+  +6000ms medias=1 count=1 code=0
+[deal retry] {"code":0,"message":"OK","ttl":1,"data":{"prompt":true,"ga_data":null,"toast_msg":"","success_num":0}}
+  after retry medias= 1 count= 1
+[cleanup] {"code":0,"message":"OK","ttl":1,"data":0}
