@@ -1,1 +1,30 @@
-{"code":0,"data":{"bvid":"BV1GJ411x7h7","aid":170001,"title":"【测试】稻香","desc":"测试简介","pic":"https://i2.hdslb.com/bfs/archive/view.jpg","duration":259,"owner":{"mid":888,"name":"音乐收藏家"},"pages":[{"cid":1001,"page":1,"part":"P1"}]}}
+{
+  "_note": "T7 fixture rebuild (T00): field set taken from a live /x/web-interface/view?bvid=... answer on 2026-11-22 (evidence/t7/capture_view.json). `videos` and top-level `cid` were present on the real answer; pages[] carry cid/page/part/duration.",
+  "code": 0,
+  "data": {
+    "bvid": "BV1GJ411x7h7",
+    "aid": 170001,
+    "videos": 1,
+    "tid": 130,
+    "tname": "音乐",
+    "copyright": 1,
+    "pic": "https://i2.hdslb.com/bfs/archive/view.jpg",
+    "title": "【测试】稻香",
+    "pubdate": 1795258613,
+    "ctime": 1795258613,
+    "desc": "测试简介",
+    "state": 0,
+    "duration": 259,
+    "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0, "hd5": 0},
+    "owner": {"mid": 888, "name": "音乐收藏家", "face": "https://i0.hdslb.com/bfs/face/creator.jpg"},
+    "stat": {"aid": 170001, "view": 12000, "danmaku": 30, "reply": 20, "favorite": 900, "coin": 500, "share": 40, "like": 800},
+    "dynamic": "",
+    "cid": 1001,
+    "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+    "short_link_v2": "https://b23.tv/BV1GJ411x7h7",
+    "pages": [
+      {"cid": 1001, "page": 1, "from": "vupload", "part": "P1", "duration": 259, "dimension": {"width": 1920, "height": 1080, "rotate": 0}}
+    ],
+    "subtitle": {"allow_submit": false, "list": []}
+  }
+}

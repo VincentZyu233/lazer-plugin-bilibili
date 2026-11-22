@@ -220,6 +220,6 @@ console.log(JSON.stringify({
   sha256,
   size: zipBuffer.length,
   platforms: ['windows', 'macos', 'linux', 'android', 'ios'],
-  minAppVersion: '2.0.0',
+  minAppVersion: '2.0.210',
 }, null, 2));
 console.log('--------------------------\n');

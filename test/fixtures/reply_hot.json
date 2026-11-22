@@ -1,0 +1,4 @@
+{"code":0,"data":{"page":{"num":1,"size":20,"count":2,"acount":2},"replies":[
+{"rpid":7001,"content":{"message":"热评第一"},"ctime":1600000000,"like":99999,"member":{"uname":"热评A","mid":200,"avatar":"//i0.hdslb.com/bfs/face/h1.jpg"}},
+{"rpid":7002,"content":{"message":"热评第二"},"ctime":1600000001,"like":88888,"member":{"uname":"热评B","mid":201,"avatar":"//i0.hdslb.com/bfs/face/h2.jpg"}}
+]}}

@@ -1,4 +1,69 @@
-{"code":0,"data":{"numResults":100,"page":1,"pagesize":20,"result":[
-{"bvid":"BV1GJ411x7h7","title":"【无损音质】周杰伦歌曲精选100首","author":"音乐收藏家","mid":888,"pic":"//i0.hdslb.com/bfs/archive/test1.jpg","duration":"4:19"},
-{"bvid":"BV1xx411c7mD","title":"周杰伦 - 稻香","author":"JayFan","mid":999,"pic":"http://i1.hdslb.com/bfs/archive/test2.jpg","duration":"3:32"}
-]}}
+{
+  "_note": "T7 fixture rebuild (T00): field set taken from a live /x/web-interface/wbi/search/type?search_type=video answer on 2026-11-22 (evidence/t7/capture_search.json). IMPORTANT: search rows carry aid but NOT cid and NOT videos — 0/20 on the live answer. That is why search ids stay plain bvid; the old fixture's shape was right here and is kept.",
+  "code": 0,
+  "data": {
+    "seid": "1000000000000000",
+    "page": 1,
+    "pagesize": 20,
+    "numResults": 100,
+    "numPages": 5,
+    "result": [
+      {
+        "type": "video",
+        "id": 117654018001,
+        "author": "音乐收藏家",
+        "mid": 888,
+        "typeid": 130,
+        "typename": "音乐",
+        "arcurl": "http://www.bilibili.com/video/BV1GJ411x7h7",
+        "aid": 117654018001,
+        "bvid": "BV1GJ411x7h7",
+        "title": "【无损音质】周杰伦歌曲精选100首",
+        "description": "",
+        "pic": "//i0.hdslb.com/bfs/archive/test1.jpg",
+        "play": 12000,
+        "video_review": 30,
+        "favorites": 900,
+        "tag": "",
+        "review": 20,
+        "pubdate": 1795258613,
+        "senddate": 1795258613,
+        "duration": "4:19",
+        "like": 800,
+        "upic": "//i0.hdslb.com/bfs/face/creator.jpg",
+        "danmaku": 40,
+        "subtitle": "",
+        "is_union_video": 0,
+        "enable_vt": 0
+      },
+      {
+        "type": "video",
+        "id": 117654018002,
+        "author": "JayFan",
+        "mid": 999,
+        "typeid": 130,
+        "typename": "音乐",
+        "arcurl": "http://www.bilibili.com/video/BV1xx411c7mD",
+        "aid": 117654018002,
+        "bvid": "BV1xx411c7mD",
+        "title": "周杰伦 - 稻香",
+        "description": "",
+        "pic": "http://i1.hdslb.com/bfs/archive/test2.jpg",
+        "play": 9000,
+        "video_review": 20,
+        "favorites": 500,
+        "tag": "",
+        "review": 10,
+        "pubdate": 1795258614,
+        "senddate": 1795258614,
+        "duration": "3:32",
+        "like": 600,
+        "upic": "//i0.hdslb.com/bfs/face/jayfan.jpg",
+        "danmaku": 25,
+        "subtitle": "",
+        "is_union_video": 0,
+        "enable_vt": 0
+      }
+    ]
+  }
+}

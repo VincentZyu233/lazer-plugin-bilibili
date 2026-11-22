@@ -1,4 +1,47 @@
-{"code":0,"data":{"list":[
-{"bvid":"BV1GJ411x7h7","title":"热门视频一","pic":"//i0.hdslb.com/bfs/hot/1.jpg","duration":"5:00","author":"UP1","mid":1},
-{"bvid":"BV1xx411c7mD","title":"热门视频二","pic":"//i0.hdslb.com/bfs/hot/2.jpg","duration":"2:30","author":"UP2","mid":2}
-]}}
+{
+  "code": 0,
+  "data": {
+    "no_more": false,
+    "note": "T7 fixture rebuild (T00): field set taken from a live /x/web-interface/popular?ps=20&pn=1 answer on 2026-11-22 (evidence/t7/capture_popular.json). videos was present on 20/20 rows, cid on 20/20, aid on 20/20. Row 2 is multi-part so `videos > 1` has something to bite on.",
+    "list": [
+      {
+        "aid": 117654018855001,
+        "videos": 1,
+        "tid": 17,
+        "tname": "单机游戏",
+        "pic": "//i0.hdslb.com/bfs/hot/1.jpg",
+        "title": "热门视频一",
+        "pubdate": 1795258613,
+        "ctime": 1795258613,
+        "desc": "",
+        "duration": 300,
+        "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0, "hd5": 0},
+        "owner": {"mid": 1, "name": "UP1", "face": "https://i1.hdslb.com/bfs/face/up1.jpg"},
+        "stat": {"aid": 117654018855001, "view": 94461, "danmaku": 2966, "reply": 636, "favorite": 2646, "coin": 8115, "share": 182, "like": 9210},
+        "cid": 43796138011,
+        "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+        "short_link_v2": "https://b23.tv/BV1GJ411x7h7",
+        "bvid": "BV1GJ411x7h7"
+      },
+      {
+        "aid": 117654018855002,
+        "videos": 2,
+        "tid": 17,
+        "tname": "单机游戏",
+        "pic": "//i0.hdslb.com/bfs/hot/2.jpg",
+        "title": "热门视频二（双 P）",
+        "pubdate": 1795258614,
+        "ctime": 1795258614,
+        "desc": "",
+        "duration": 150,
+        "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0, "hd5": 0},
+        "owner": {"mid": 2, "name": "UP2", "face": "https://i1.hdslb.com/bfs/face/up2.jpg"},
+        "stat": {"aid": 117654018855002, "view": 80000, "danmaku": 1200, "reply": 300, "favorite": 900, "coin": 4000, "share": 90, "like": 7000},
+        "cid": 43796138012,
+        "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+        "short_link_v2": "https://b23.tv/BV1xx411c7mD",
+        "bvid": "BV1xx411c7mD"
+      }
+    ]
+  }
+}

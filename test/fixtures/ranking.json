@@ -1,3 +1,28 @@
-{"code":0,"data":{"list":[
-{"bvid":"BV1rank001","title":"排行第一","pic":"//i0.hdslb.com/bfs/rank/1.jpg","duration":"3:00","author":"排行UP","mid":3}
-]}}
+{
+  "code": 0,
+  "data": {
+    "note": "T7 fixture rebuild (T00): field set taken from a live /x/web-interface/ranking/v2?rid=0&type=all answer on 2026-11-22 (evidence/t7/capture_ranking.json, evidence/t7/G0_capture_fields.log). The real endpoint returns cid/videos/aid on 100/100 rows; the pre-T7 fixture carried none of them, which is why a `bvid:cid` id never appeared in 73 tests.",
+    "list": [
+      {
+        "aid": 117654018001,
+        "videos": 1,
+        "tid": 17,
+        "tname": "单机游戏",
+        "pic": "//i0.hdslb.com/bfs/rank/1.jpg",
+        "title": "排行第一",
+        "pubdate": 1795258613,
+        "ctime": 1795258613,
+        "desc": "",
+        "duration": 180,
+        "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0, "hd5": 0},
+        "owner": {"mid": 3, "name": "排行UP", "face": "https://i1.hdslb.com/bfs/face/rank.jpg"},
+        "stat": {"aid": 117654018001, "view": 94461, "danmaku": 2966, "reply": 636, "favorite": 2646, "coin": 8115, "share": 182, "like": 9210},
+        "cid": 43796138001,
+        "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+        "short_link_v2": "https://b23.tv/BV1rank001",
+        "bvid": "BV1rank001",
+        "score": 1000000
+      }
+    ]
+  }
+}

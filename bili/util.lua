@@ -28,6 +28,19 @@ function M.number(value, fallback)
   return math.floor(parsed)
 end
 
+-- `nil` when the value is not a number at all. M.number cannot express that:
+-- its fallback defaults to 0, which would turn "endpoint did not report a
+-- total" into "there are zero rows".
+function M.opt_number(value)
+  if value == nil then return nil end
+  local kind = type(value)
+  if kind == "number" then return math.floor(value) end
+  if kind ~= "string" then return nil end
+  local parsed = tonumber(value)
+  if parsed == nil then return nil end
+  return math.floor(parsed)
+end
+
 function M.list(value)
   if type(value) == "table" then return value end
   return {}
@@ -115,15 +128,42 @@ function M.replace(source, needle, replacement)
   return table.concat(out)
 end
 
--- Search results carry "4:19"; view carries seconds (213).
+-- Search results carry "4:19"; view carries seconds (213); long videos carry
+-- "1:02:03". Accumulate segment by segment (BiliMusic bilibili.rs:1917-1922):
+-- the old code split on the FIRST colon only, so `tonumber("02:03")` was nil,
+-- the seconds fell back to 0 and 1:02:03 became 60 000 ms instead of 3 723 000.
+-- An illegal segment counts as 0 (same semantics as `unwrap_or(0)`), and
+-- anything past 24 h is clamped so the client progress bar cannot overflow.
+local DAY_MS = 86400000
+
 function M.parse_duration(value)
-  if type(value) == "number" then return math.floor(value * 1000) end
+  if type(value) == "number" then
+    local ms = math.floor(value * 1000)
+    if ms > DAY_MS then ms = DAY_MS end
+    return ms
+  end
   if type(value) ~= "string" then return 0 end
-  local colon = string.find(value, ":", 1, true)
-  if colon == nil then return M.number(value, 0) * 1000 end
-  local minutes = M.number(string.sub(value, 1, colon - 1), 0)
-  local seconds = M.number(string.sub(value, colon + 1), 0)
-  return (minutes * 60 + seconds) * 1000
+  local text = M.trim(value)
+  if text == "" then return 0 end
+  local total = 0
+  local start = 1
+  while true do
+    local colon = string.find(text, ":", start, true)
+    local part
+    if colon == nil then
+      part = string.sub(text, start)
+    else
+      part = string.sub(text, start, colon - 1)
+    end
+    local piece = tonumber(M.trim(part))
+    if piece == nil or piece < 0 then piece = 0 end
+    total = total * 60 + piece
+    if colon == nil then break end
+    start = colon + 1
+  end
+  local ms = math.floor(total * 1000)
+  if ms > DAY_MS then ms = DAY_MS end
+  return ms
 end
 
 function M.map_rows(values, mapper)
@@ -134,17 +174,6 @@ function M.map_rows(values, mapper)
     if mapped ~= nil then out[#out + 1] = mapped end
   end
   return out
-end
-
--- B site pages are 1-based; Lazer hands out 0-based offsets.
-function M.page_of(limit, offset, max_page_size)
-  local take = M.number(limit, 20)
-  if take < 1 then take = 20 end
-  local ceiling = max_page_size or take
-  if take > ceiling then take = ceiling end
-  local skip = M.number(offset, 0)
-  if skip < 0 then skip = 0 end
-  return take, math.floor(skip / take) + 1
 end
 
 function M.split_lines(value)

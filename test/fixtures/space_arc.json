@@ -1,4 +1,44 @@
-{"code":0,"data":{"list":{"vlist":[
-{"bvid":"BV1arc0001","title":"UP主投稿一","author":"音乐收藏家","mid":888,"pic":"//i0.hdslb.com/bfs/arc/1.jpg","length":"6:30"},
-{"bvid":"BV1arc0002","title":"UP主投稿二","author":"音乐收藏家","mid":888,"pic":"//i0.hdslb.com/bfs/arc/2.jpg","length":"2:15"}
-]}}}
+{
+  "_note": "T7 fixture rebuild (T00). Live /x/space/wbi/arc/search is BLOCKED for this account (code -403 访问权限不足, re-measured 2026-11-22), so this fixture cannot be captured from the wire. Field set follows the documented vlist shape instead: bvid/title/author/mid/pic/length/aid/videos. It deliberately does NOT invent a `cid` — vlist rows have never carried one, and inventing it would repeat the exact class of bug T00 exists to kill.",
+  "code": 0,
+  "data": {
+    "list": {
+      "tlist": {"1": {"tid": 130, "count": 2, "name": "音乐"}},
+      "vlist": [
+        {
+          "aid": 170011,
+          "videos": 1,
+          "bvid": "BV1arc0001",
+          "title": "UP主投稿一",
+          "author": "音乐收藏家",
+          "mid": 888,
+          "pic": "//i0.hdslb.com/bfs/arc/1.jpg",
+          "length": "6:30",
+          "created": 1795258613,
+          "description": "",
+          "is_pay": 0,
+          "is_union_video": 0,
+          "play": 12000,
+          "video_review": 30
+        },
+        {
+          "aid": 170012,
+          "videos": 1,
+          "bvid": "BV1arc0002",
+          "title": "UP主投稿二",
+          "author": "音乐收藏家",
+          "mid": 888,
+          "pic": "//i0.hdslb.com/bfs/arc/2.jpg",
+          "length": "2:15",
+          "created": 1795258614,
+          "description": "",
+          "is_pay": 0,
+          "is_union_video": 0,
+          "play": 9000,
+          "video_review": 20
+        }
+      ]
+    },
+    "page": {"pn": 1, "ps": 50, "count": 2}
+  }
+}

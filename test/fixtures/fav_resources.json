@@ -1,4 +1,75 @@
-{"code":0,"data":{"medias":[
-{"bvid":"BV1GJ411x7h7","title":"稻香","pic":"//i0.hdslb.com/bfs/archive/a.jpg","duration":"4:19","author":"收藏家","mid":888},
-{"bvid":"BV1xx411c7mD","title":"晴天","pic":"//i0.hdslb.com/bfs/archive/b.jpg","duration":"4:29","author":"收藏家","mid":888}
-]}}
+{
+  "_note": "T7 fixture rebuild (T00): field set taken from a live /x/v3/fav/resource/list answer on 2026-11-22 (evidence/t7/capture_fav_resources.json). NOTE: fav rows carry NO top-level cid, videos or aid (0/19 each on the live answer) — the first part's cid lives in `ugc.first_cid`. That is why playlistSongs ids stay plain bvid; the endpoint really has no top-level cid to build one from.",
+  "code": 0,
+  "data": {
+    "info": {
+      "id": 72000000,
+      "fid": 720000,
+      "mid": 10000001,
+      "attr": 1,
+      "title": "默认收藏夹",
+      "cover": "//i0.hdslb.com/bfs/archive/a.jpg",
+      "cover_type": 2,
+      "media_count": 2,
+      "cnt_info": {"collect": 0, "play": 0, "thumb_up": 0, "share": 0},
+      "type": 11,
+      "intro": "",
+      "ctime": 1438893296,
+      "mtime": 1564833761,
+      "state": 0,
+      "fav_state": 0,
+      "like_state": 0,
+      "is_top": false,
+      "is_kid_playlist": false,
+      "kid_playlist_desc": ""
+    },
+    "medias": [
+      {
+        "id": 721350491,
+        "type": 2,
+        "title": "稻香",
+        "cover": "//i0.hdslb.com/bfs/archive/a.jpg",
+        "intro": "",
+        "page": 1,
+        "duration": 259,
+        "upper": {"mid": 888, "name": "收藏家", "face": "https://i2.hdslb.com/bfs/face/col.jpg", "jump_link": ""},
+        "attr": 0,
+        "cnt_info": {"collect": 2827, "play": 145204, "danmaku": 77, "vt": 0, "play_switch": 0, "reply": 0, "view_text_1": "14.5万"},
+        "link": "bilibili://video/721350491",
+        "ctime": 1635089948,
+        "pubtime": 1635089948,
+        "fav_time": 1785515576,
+        "bv_id": "BV1GJ411x7h7",
+        "bvid": "BV1GJ411x7h7",
+        "season": null,
+        "ogv": null,
+        "ugc": {"first_cid": 1001},
+        "media_list_link": "bilibili://music/playlist/playpage/83142150?page_type=3&oid=721350491&otype=2"
+      },
+      {
+        "id": 721350492,
+        "type": 2,
+        "title": "晴天",
+        "cover": "//i0.hdslb.com/bfs/archive/b.jpg",
+        "intro": "",
+        "page": 1,
+        "duration": 269,
+        "upper": {"mid": 888, "name": "收藏家", "face": "https://i2.hdslb.com/bfs/face/col.jpg", "jump_link": ""},
+        "attr": 0,
+        "cnt_info": {"collect": 1800, "play": 90000, "danmaku": 40, "vt": 0, "play_switch": 0, "reply": 0, "view_text_1": "9.0万"},
+        "link": "bilibili://video/721350492",
+        "ctime": 1635089949,
+        "pubtime": 1635089949,
+        "fav_time": 1785515577,
+        "bv_id": "BV1xx411c7mD",
+        "bvid": "BV1xx411c7mD",
+        "season": null,
+        "ogv": null,
+        "ugc": {"first_cid": 1002},
+        "media_list_link": "bilibili://music/playlist/playpage/83142151?page_type=3&oid=721350492&otype=2"
+      }
+    ],
+    "has_more": false,
+    "ttl": 1
+  }
+}

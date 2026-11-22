@@ -37,10 +37,12 @@ function M.artist_detail(mid, card)
 end
 
 -- Every song-returning op uses this shape (task book §4.5).
+-- `overrides.id` wins: it is how a caller pins the identity to one part
+-- (`bvid:cid`) instead of letting the row's bvid decide.
 function M.song(item, overrides)
   if type(item) ~= "table" then item = {} end
   overrides = overrides or {}
-  local bvid = util.text(util.field(item, "bvid", "bvid"))
+  local bvid = util.text(util.field(item, "bvid", "bv_id"))
   if bvid == "" then bvid = util.text(overrides.bvid) end
   local mid = util.field(item, "mid")
   if mid == nil then
@@ -60,10 +62,21 @@ function M.song(item, overrides)
   local duration = util.field(item, "duration", "length")
   if duration == nil then duration = util.field(item, "duration_seconds") end
   local duration_ms = util.parse_duration(duration)
-  if duration_ms == 0 then duration_ms = util.number(overrides.durationMs, 0) end
+  -- An explicit override wins: a caller that resolved one part knows the part's
+  -- duration, while the row's `duration` is the whole collection.
+  local forced = util.opt_number(overrides.durationMs)
+  if forced ~= nil then
+    duration_ms = forced
+  elseif duration_ms == 0 then
+    duration_ms = util.number(overrides.durationMs, 0)
+  end
+  local id = util.text(overrides.id)
+  if id == "" then id = bvid end
+  local title = util.text(overrides.title)
+  if title == "" then title = util.clean_title(util.field(item, "title")) end
   return {
-    id = bvid,
-    title = util.clean_title(util.field(item, "title")),
+    id = id,
+    title = title,
     artists = { M.artist(mid, author) },
     albumId = bvid,
     albumName = "B站视频",
@@ -75,17 +88,33 @@ end
 
 -- B站收藏夹 list-all 不返回封面；封面由 catalog 用第一个视频的 cover 回填。
 -- 传入 cover_override 时优先用它，否则退回 folder 自带的 cover/pic。
-function M.playlist(folder, is_favorites, cover_override)
+--
+-- `writable` and `owner` are what the host's collections() buckets on
+-- (platform_catalog.dart:181-197):
+--   personal   = isFavorites && (writable || owner == account.id)
+--   created    = writable && id != personal.id
+--   subscribed = !writable && id != personal.id
+-- Omitting them made writable default to false and owner to null, so every
+-- folder fell into `subscribed`, `created` stayed empty, and the "添加到歌单"
+-- dialog listed only the synthesised "我喜欢的音乐" row.
+--
+-- `list-all` returns exactly the folders the signed-in account created, so
+-- writable is true and owner is that account. `mid` is passed in rather than
+-- read from the folder: the payload carries no owner field at all.
+function M.playlist(folder, is_favorites, cover_override, mid)
   if type(folder) ~= "table" then folder = {} end
   local id = util.field(folder, "media_id", "id")
   local cover = util.image(cover_override)
   if cover == nil then cover = util.image(util.field(folder, "cover", "pic")) end
+  local owner = util.text(mid)
   return {
     id = tostring(util.number(id, 0)),
     name = util.text(util.field(folder, "title", "name")),
     coverUrl = cover,
     songCount = util.number(util.field(folder, "media_count", "songCount"), 0),
     isFavorites = is_favorites == true,
+    writable = owner ~= "",
+    owner = owner ~= "" and owner or nil,
   }
 end
 

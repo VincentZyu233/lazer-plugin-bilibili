@@ -9,6 +9,7 @@
 local http = require("bili.http")
 local store = require("bili.store")
 local util = require("bili.util")
+local errors = require("bili.errors")
 
 local M = {}
 
@@ -40,10 +41,13 @@ function M.session()
   end
   local ok, body = pcall(http.get, "/x/web-interface/nav")
   if not ok then
-    -- A transport failure is not a sign-out: keep the last known account.
-    error(body, 0)
+    -- A transport failure is not a sign-out: keep the last known account and
+    -- report it as retryable, so the client does not print "wrong password"
+    -- for a dropped connection.
+    errors.throw("transient")
   end
   local user, mid = profile_of(body)
+  if user == nil then errors.throw("auth") end
   store.user = user
   store.mid = mid or 0
   return user
@@ -51,24 +55,41 @@ end
 
 function M.require_user()
   if store.user == nil then M.session() end
-  if store.user == nil then error("Gateway code 301", 0) end
+  if store.user == nil then errors.throw("auth") end
   return store.user
 end
 
+-- Cookie login. A pasted header must carry BOTH SESSDATA and bili_jct: without
+-- bili_jct every write (favorite, like) fails with -400 later, and without
+-- SESSDATA there is no session at all. Rejecting up front costs no request.
 function M.login_cookie(value)
   local candidate = util.cookie_header(value)
-  if candidate == "" then return nil end
+  if candidate == "" then errors.throw("param") end
+  local sess = host.cookie_field(candidate, "SESSDATA")
+  local csrf = host.cookie_field(candidate, "bili_jct")
+  if sess == nil or sess == "" or csrf == nil or csrf == "" then
+    errors.throw("param")
+  end
   local previous_cookie = store.cookie()
   local previous_user = store.user
   local previous_mid = store.mid
   store.set_cookie(candidate)
   store.user = nil
   local ok, user = pcall(M.session)
-  if not ok or user == nil then
+  if not ok then
     store.set_cookie(previous_cookie)
     store.user = previous_user
     store.mid = previous_mid
-    return nil
+    -- Distinguish "the cookie is invalid" from "the check could not run".
+    local kind = tostring(user)
+    if string.find(kind, "KIND auth", 1, true) ~= nil then errors.throw("auth") end
+    errors.throw("transient")
+  end
+  if user == nil then
+    store.set_cookie(previous_cookie)
+    store.user = previous_user
+    store.mid = previous_mid
+    errors.throw("auth")
   end
   store.reset()
   return user
@@ -80,7 +101,7 @@ function M.qr_key()
   local body = http.get("/x/passport-login/web/qrcode/generate", nil, { base = http.PASSPORT, qr = true })
   local data = type(body.data) == "table" and body.data or {}
   local key = util.text(data.qrcode_key)
-  if key == "" then error("Gateway code -400", 0) end
+  if key == "" then errors.throw("param") end
   -- The generate endpoint also returns the URL the app scans; the gateway asks
   -- qrKey for the key and qrUrl for the URL, so keep both from one request.
   store.set_qr_url(util.text(data.url))
@@ -135,10 +156,15 @@ function M.qr_check(key)
   return 803
 end
 
+-- Logout is local only. Posting to /x/web-interface/nav never revoked anything
+-- (it is a read endpoint) and the extra write-shaped request was itself a risk
+-- control signal; the authoritative session lives in the stored Cookie, so
+-- clearing it is the whole operation.
 function M.logout()
-  pcall(http.post, "/x/web-interface/nav", {}, {})
   store.set_cookie("")
   store.set_qr_cookie("")
+  store.set_qr_url("")
+  store.set_device("")
   store.reset()
   return true
 end

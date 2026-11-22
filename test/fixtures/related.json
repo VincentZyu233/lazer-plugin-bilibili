@@ -1,4 +1,44 @@
-{"code":0,"data":[
-{"bvid":"BV1rel0001","title":"相关推荐一","pic":"//i0.hdslb.com/bfs/rel/1.jpg","duration":"3:10","author":"REL1","mid":11},
-{"bvid":"BV1rel0002","title":"相关推荐二","pic":"//i0.hdslb.com/bfs/rel/2.jpg","duration":"3:20","author":"REL2","mid":12}
-]}
+{
+  "_note": "T7 fixture rebuild (T00): field set taken from a live /x/web-interface/archive/related?bvid=BV11eyhzxEvr answer on 2026-11-22 (evidence/t7/capture_related.json). cid and videos were present on 40/40 rows. `data` is an ARRAY on the real endpoint, not an object.",
+  "code": 0,
+  "data": [
+    {
+      "aid": 117654018001,
+      "videos": 1,
+      "tid": 17,
+      "tname": "单机游戏",
+      "pic": "//i0.hdslb.com/bfs/rel/1.jpg",
+      "title": "相关推荐一",
+      "pubdate": 1795258613,
+      "ctime": 1795258613,
+      "desc": "",
+      "duration": 190,
+      "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0},
+      "owner": {"mid": 11, "name": "REL1", "face": "https://i1.hdslb.com/bfs/face/rel1.jpg"},
+      "stat": {"aid": 117654018001, "view": 1000, "danmaku": 10, "reply": 5, "favorite": 20, "coin": 30, "share": 2, "like": 100},
+      "cid": 43796138021,
+      "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+      "short_link_v2": "https://b23.tv/BV1rel0001",
+      "bvid": "BV1rel0001"
+    },
+    {
+      "aid": 117654018002,
+      "videos": 1,
+      "tid": 17,
+      "tname": "单机游戏",
+      "pic": "//i0.hdslb.com/bfs/rel/2.jpg",
+      "title": "相关推荐二",
+      "pubdate": 1795258614,
+      "ctime": 1795258614,
+      "desc": "",
+      "duration": 200,
+      "rights": {"bp": 0, "elec": 0, "download": 0, "movie": 0, "pay": 0},
+      "owner": {"mid": 12, "name": "REL2", "face": "https://i1.hdslb.com/bfs/face/rel2.jpg"},
+      "stat": {"aid": 117654018002, "view": 900, "danmaku": 9, "reply": 4, "favorite": 18, "coin": 28, "share": 1, "like": 90},
+      "cid": 43796138022,
+      "dimension": {"width": 1920, "height": 1080, "rotate": 0},
+      "short_link_v2": "https://b23.tv/BV1rel0002",
+      "bvid": "BV1rel0002"
+    }
+  ]
+}

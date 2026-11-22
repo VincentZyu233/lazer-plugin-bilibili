@@ -1,18 +1,40 @@
 {
   "id": "community.bilibili.music",
   "name": "哔哩哔哩",
-  "version": "0.1.0",
+  "version": "0.4.2",
   "description": "把 B 站当作曲库：搜索、播放、歌词、收藏夹、排行榜。改编自 BiliMusic 的接口实现。",
   "author": "YG",
   "entry": "main.lua",
   "apiVersion": 1,
   "provider": "bilibili",
-  "capabilities": ["search", "playlists", "favorites", "lyrics",
-                   "homeFeed", "charts", "recommendations", "comments"],
-  "auth": ["qr", "cookie"],
+  "minAppVersion": "2.0.210",
+  "capabilities": [
+    "search",
+    "playlists",
+    "favorites",
+    "lyrics",
+    "homeFeed",
+    "charts",
+    "recommendations",
+    "comments",
+    "album",
+    "albumSongs",
+    "browseAlbums"
+  ],
+  "auth": [
+    "qr",
+    "cookie"
+  ],
   "permissions": {
-    "network": ["api.bilibili.com", "passport.bilibili.com", "www.bilibili.com",
-                "*.hdslb.com", "*.bilivideo.com", "*.bilivideo.cn", "lrclib.net"],
+    "network": [
+      "api.bilibili.com",
+      "passport.bilibili.com",
+      "www.bilibili.com",
+      "*.hdslb.com",
+      "*.bilivideo.com",
+      "*.bilivideo.cn",
+      "lrclib.net"
+    ],
     "storage": true
   }
 }

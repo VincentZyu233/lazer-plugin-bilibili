@@ -1,7 +1,18 @@
 -- Catalog operations: search, song, playlists/favorites, discovery, comments.
 --
--- Pagination is 1-based on Bili and 0-based in Lazer: page = floor(offset/limit)+1.
--- WBI-signed endpoints (search, artistSongs) go through bili.wbi.
+-- Paging is owned by bili.pager: the host computes `hasMore` from the number of
+-- rows it receives (`list.length >= limit`), so every op must return exactly
+-- min(limit, remaining). Two paging families exist and they are not
+-- interchangeable:
+--
+--   * Remote pages that can be SHORTER than ps (favourite folders: measured
+--     ps=40 -> 38 rows, ps=20 -> 19). Page boundaries come from the observed
+--     length of every page already fetched — never from `floor(offset/cap)+1`.
+--   * Remote pages that are exact position slices (comments: measured 20 rows
+--     on pn=1/2/3/4/5/10/20/33/66 with no overlap). Those pass
+--     `strict_seek = true` so a deep offset jumps to its page instead of
+--     walking there: one request per page would burn the whole per-call request
+--     budget (bili/pager.lua PLAINTEXT_BUDGET) before the window is reached.
 local http = require("bili.http")
 local wbi = require("bili.wbi")
 local util = require("bili.util")
@@ -10,40 +21,44 @@ local models = require("bili.models")
 local auth = require("bili.auth")
 local stream = require("bili.stream")
 local lyrics = require("bili.lyrics")
+local pager = require("bili.pager")
+local ids = require("bili.ids")
+local errors = require("bili.errors")
 
 local M = {}
+
+-- Login, logout and re-login change what every cursor is allowed to serve.
+store.on_reset(function() pager.reset() end)
 
 local function data_of(body)
   if type(body) ~= "table" or type(body.data) ~= "table" then return {} end
   return body.data
 end
 
--- 宿主每页要 limit 行（platform_catalog.dart 传 100），而 B 站单页硬顶
--- 因接口而异（50 / 40 / 20）。宿主 lua_music_gateway.dart:200 用
--- `hasMore = list.length >= limit` 自算"还有没有下一页"，插件传不进去，
--- 所以必须在"返回多少行"上补齐。少给一行，宿主就判定末页。
---
--- 页内偏移必须算：宿主的 offset 是 0/100/200…，B 站 cap 是 50/40，
--- 直接 offset/cap 会在 offset 不是 cap 倍数时错位。
-local function collect(load, limit, offset, cap, max_hops)
+local function max_number(a, b)
+  local left = util.number(a, 0)
+  local right = util.number(b, 0)
+  if left > right then return left end
+  return right
+end
+
+-- Rows -> song models, dropping entries that carry no playable id. A row
+-- without a bvid used to surface as `id=""`, which the host renders as a blank
+-- track that can never resolve.
+local function song_rows(rows)
   local out = {}
-  local skip = offset
-  local hops = 0
-  while #out < limit and hops < max_hops do
-    hops = hops + 1
-    local page_size = cap
-    local pn = math.floor(skip / page_size) + 1
-    local in_page = skip - (pn - 1) * page_size
-    local rows = util.list(load(pn, page_size))
-    if #rows == 0 then break end
-    local index = in_page + 1
-    while index <= #rows and #out < limit do
-      out[#out + 1] = rows[index]
-      index = index + 1
+  local source = util.list(rows)
+  for index = 1, #source do
+    local item = source[index]
+    if type(item) == "table" then
+      local bvid = util.text(util.field(item, "bvid", "bv_id"))
+      if bvid ~= "" then
+        local cid = util.text(util.field(item, "cid"))
+        local song = models.song(item, { id = ids.of(bvid, cid) })
+        song.albumId = bvid
+        out[#out + 1] = song
+      end
     end
-    skip = skip + (#rows - in_page)
-    -- 短页即末页：收藏夹 ps=20 会返 19（稿件已删），靠 #rows==0 会多拉一页。
-    if #rows < page_size then break end
   end
   return out
 end
@@ -52,39 +67,223 @@ end
 -- Search and detail
 -- ---------------------------------------------------------------------------
 
+-- Hard ceiling on search rows per call, and the remote page size — the two are
+-- the SAME number on purpose.
+--
+-- The host runs the whole `search` op under a 250k-instruction budget
+-- (lua_plugin_runtime_io.dart:1096). What the budget actually pays for is
+-- DECODED ROWS, not `limit`: both buckets (video + UP) are walked inside one
+-- invocation, and each one decodes a whole remote page even when the caller
+-- asked for fewer. Measured offline with wire-shaped rows:
+--
+--   40 rows per bucket (80 total) -> answers
+--   50 rows per bucket (100 total) -> 408, at any `limit`, including limit=1
+--   (实测记录 R17_search_decode_cliff)
+--
+-- That is why the old `cap = 50` was the real defect behind T8/D3: a limit the
+-- caller could never receive, because the page it had to decode first was
+-- already fatal. Setting cap == ceiling means one page per bucket, 35 rows each,
+-- 70 decoded rows — under the measured 80-row boundary with margin.
+--
+-- Live, both buckets populated, the same op answers limit=40 and 408s at 45
+-- (实测记录 R13_search_live_fine, R14_search_live_swing.log), so 35 also
+-- keeps a margin under the live edge rather than sitting on it.
+--
+-- The response is clamped instead of failing: the host derives `hasMore` from
+-- `rows.length >= limit` (lua_music_gateway.dart:197), so 35 honest rows read as
+-- "more to come" at limit=35, while a 408 replaces the whole search page with an
+-- error card. Fewer rows beats no rows.
+local SEARCH_ROW_CEILING = 35
+-- One page per bucket at the ceiling: see above.
+local SEARCH_PAGE_SIZE = SEARCH_ROW_CEILING
+
 function M.search(query, limit, offset)
   local keyword = util.text(query)
   if keyword == "" then return { songs = {}, albums = {}, artists = {}, playlists = {} } end
-  local take, page = util.page_of(limit, offset, 50)
+  local asked = util.number(limit, 30)
+  if asked < 1 then asked = 30 end
+  local want = asked
+  local clamped = false
+  if want > SEARCH_ROW_CEILING then
+    want = SEARCH_ROW_CEILING
+    clamped = true
+  end
+  local skip = util.number(offset, 0)
+  if skip < 0 then skip = 0 end
+  local cap = SEARCH_PAGE_SIZE
+  local hops = pager.hops(skip, want, cap)
 
-  -- songs: 视频
-  local video = wbi.get("/x/web-interface/wbi/search/type", {
-    search_type = "video", keyword = keyword, page = page, page_size = take,
-  })
-  local songs = util.map_rows(util.list(data_of(video).result), models.song)
+  -- One cursor per bucket: video and UP rows come from the same endpoint with a
+  -- different search_type, and their totals differ.
+  --
+  -- SIGNED family: /x/web-interface/wbi/search/type is wbi-signed, so it shares
+  -- the 12-request ceiling with space/arc rather than the plaintext 32
+  -- (实测记录 R2_artist_budget).
+  local songs = pager.walk("search:video:" .. keyword, function(pn)
+    local body = wbi.get("/x/web-interface/wbi/search/type", {
+      search_type = "video", keyword = keyword, page = pn, page_size = cap,
+    })
+    local data = data_of(body)
+    return song_rows(data.result), util.opt_number(data.numResults)
+  end, want, skip, hops, nil, { cap = cap, budget = pager.SIGNED_BUDGET })
 
-  -- artists: UP 主
-  local user = wbi.get("/x/web-interface/wbi/search/type", {
-    search_type = "bili_user", keyword = keyword, page = page, page_size = take,
-  })
-  local artists = util.map_rows(util.list(data_of(user).result), models.artist_row)
+  local artists = pager.walk("search:user:" .. keyword, function(pn)
+    local body = wbi.get("/x/web-interface/wbi/search/type", {
+      search_type = "bili_user", keyword = keyword, page = pn, page_size = cap,
+    })
+    local data = data_of(body)
+    return util.map_rows(util.list(data.result), models.artist_row),
+           util.opt_number(data.numResults)
+  end, want, skip, hops, nil, { cap = cap, budget = pager.SIGNED_BUDGET })
 
   -- albums / playlists 有意留空：B 站没有"歌手专辑"，番剧搜索不稳定
   -- （同一关键词两次结果 11 与 0），空桶比假桶诚实。
-  return { songs = songs, albums = {}, artists = artists, playlists = {} }
+  --
+  -- `truncated` tells the client the clamp happened. It is not read by 2.0.210's
+  -- gateway, but a caller that sees fewer rows than it asked for can now tell
+  -- "we hit the ceiling" from "the search ran out".
+  return {
+    songs = songs, albums = {}, artists = artists, playlists = {},
+    truncated = clamped, limit = want, requestedLimit = asked,
+  }
 end
 
+-- Song detail. `id` may be `bvid` or `bvid:cid`. The returned id MIRRORS the
+-- request: a plain bvid keeps resolving to a plain bvid so the host's existing
+-- cache entries (lyrics, play state) still hit; asking for a part keeps the part.
 function M.song(id)
-  local body = http.get("/x/web-interface/view", { bvid = util.text(id) })
+  local bvid, cid = ids.parse(id)
+  local body = http.get("/x/web-interface/view", { bvid = bvid })
   local data = data_of(body)
-  local song = models.song(data)
   local pages = util.list(data.pages)
+  local part = nil
+  local part_index = 1
+  for index = 1, #pages do
+    if cid ~= "" and util.text(pages[index].cid) == cid then
+      part = pages[index]
+      part_index = index
+      break
+    end
+  end
+  -- An explicit part that does not exist is a 404, not a reason to answer with
+  -- P1: the old fallback returned P1's title and duration under the requested
+  -- cid, so the client showed one part's name for another part's audio. The
+  -- check is local (the pages are already in hand), so no extra request.
+  if cid ~= "" and part == nil then errors.throw("notfound") end
+  if part == nil and #pages > 0 then part = pages[1] end
+
+  local song = models.song(data, {
+    id = ids.format(bvid, cid),
+    -- 精确到某一 P 时标题与时长都取该 P 的：view 顶层的 duration 是整个合集，
+    -- 用它会让 P2 的进度条按 25 分钟的合集长度走。
+    title = part ~= nil and cid ~= "" and util.text(part.part) or "",
+    durationMs = part ~= nil and cid ~= "" and
+                 (util.number(part.duration, 0) * 1000) or nil,
+  })
   song.extra = {
-    cid = #pages > 0 and util.text(pages[1].cid) or "",
+    cid = part ~= nil and util.text(part.cid) or "",
     parts = #pages,
+    part = part_index,
     desc = util.text(data.desc),
   }
   return song
+end
+
+-- The video itself is the album: B站 has no separate album entity, and a
+-- multi-part video is the closest thing to one.
+function M.album(id)
+  local bvid, cid = ids.parse(id)
+  local body = http.get("/x/web-interface/view", { bvid = bvid })
+  local data = data_of(body)
+  local pages = util.list(data.pages)
+  local owner = type(data.owner) == "table" and data.owner or {}
+  return {
+    id = bvid,
+    title = util.clean_title(util.text(data.title)),
+    coverUrl = util.image(util.field(data, "pic", "cover")),
+    songCount = #pages,
+    artists = { models.artist(owner.mid, owner.name) },
+  }
+end
+
+-- Parts of a video as songs. `id` is the album id (plain bvid); each row is
+-- identified by `bvid:cid` so playing P2 never resolves P1's audio.
+--
+-- `ALBUM_SONG_CEILING` bounds ROWS PER CALL, not the album. The host reads
+-- `hasMore` from `rows.length >= limit` (lua_music_gateway.dart:200) and asks
+-- again with `offset += rows.length`, so a full page is simply the next page
+-- while a short one is a permanent dead end — a 30-row clamp on a 62-part
+-- album made every part past the 30th unreachable
+-- (实测记录 R20_album_host_hasmore_live).
+--
+-- The ceiling exists because the whole op runs under one instruction budget and
+-- the cost is per ROW MAPPED, not per request: returning every part of a 62-part
+-- video answered 408 and the album opened as an error card
+-- (实测记录 R19_album_songs_cost). Hoisting the per-video work out of
+-- the row loop moved that wall past 160 rows offline
+-- (实测记录 R16_offline_cliff_hoist); 100 keeps a wide margin under it
+-- and is exactly the page size the host already asks for.
+local ALBUM_SONG_CEILING = 100
+
+function M.album_songs(id, limit, offset)
+  local bvid, _ = ids.parse(id)
+  local body = http.get("/x/web-interface/view", { bvid = bvid })
+  local data = data_of(body)
+  local pages = util.list(data.pages)
+  local want = util.number(limit, 100)
+  if want < 1 then want = 100 end
+  if want > ALBUM_SONG_CEILING then want = ALBUM_SONG_CEILING end
+  local skip = util.number(offset, 0)
+  if skip < 0 then skip = 0 end
+
+  -- Filter BEFORE slicing. A part whose `cid` is empty cannot be played, so it
+  -- is dropped from the row space — but the host advances `offset` by the number
+  -- of rows it RECEIVED (music_models.dart:250). Slicing the raw `pages` and
+  -- dropping rows afterwards would therefore both shorten the page (the host
+  -- reads a short page as "no more") and shift the window by the number of
+  -- dropped rows, repeating or skipping parts. One filtered list, one index
+  -- space, both for `skip` and for `want`.
+  local mappable = {}
+  for index = 1, #pages do
+    local page = pages[index]
+    if type(page) == "table" and util.text(page.cid) ~= "" then
+      mappable[#mappable + 1] = page
+    end
+  end
+  local rows = pager.slice(mappable, want, skip)
+
+  local owner = type(data.owner) == "table" and data.owner or {}
+  -- Per-VIDEO work, hoisted out of the row loop: `clean_title`, `image` and
+  -- `models.artist` each cost a full pass over the same inputs for every part,
+  -- which is what put the 408 wall at 63 rows. Only the part-dependent title is
+  -- still built per row.
+  local album_name = util.clean_title(util.text(data.title))
+  local artists = { models.artist(owner.mid, owner.name) }
+  local cover = util.image(util.field(data, "pic", "cover"))
+  local multi = #mappable > 1
+  local out = {}
+  for index = 1, #rows do
+    local page = rows[index]
+    local cid = util.text(page.cid)
+    local part = util.text(page.part)
+    local title
+    if part ~= "" and multi then
+      title = util.clean_title("P" .. tostring(util.number(page.page, index + skip)) .. " " .. part)
+    else
+      title = album_name
+    end
+    out[#out + 1] = {
+      id = ids.format(bvid, cid),
+      title = title,
+      artists = artists,
+      albumId = bvid,
+      albumName = album_name,
+      coverUrl = cover,
+      durationMs = util.parse_duration(page.duration),
+      contentType = "video/mp4",
+    }
+  end
+  return out
 end
 
 function M.stream(id, quality, cid)
@@ -112,105 +311,266 @@ local function folder_is_default(folder)
          util.number(util.field(folder, "media_id", "id"), 0) == 0
 end
 
--- 收藏夹 list-all 不返回封面，用第一页第一个视频的 cover 回填。
+local function folder_id(folder)
+  return util.text(util.field(folder, "media_id", "id"))
+end
+
+-- Cover backfill cache. list-all returns no cover at all, so each folder needs
+-- one extra `ps=1` request. Without a cache that is N requests every time the
+-- library panel opens; with a 6 h TTL it is N once per session.
+local COVER_TTL_MS = 6 * 60 * 60 * 1000
+local COVER_LIMIT = 100
+-- Hard ceiling per call: a library with hundreds of folders must not turn one
+-- UI open into hundreds of requests. Folders past the budget keep the folder's
+-- own (empty) cover and get filled on the next open.
+local COVER_BUDGET = 20
+local covers = {}
+local cover_order = {}
+
+store.on_reset(function()
+  covers = {}
+  cover_order = {}
+end)
+
+local function cover_get(id)
+  local entry = covers[id]
+  if entry == nil then return nil end
+  if host.now() - entry.at >= COVER_TTL_MS then
+    covers[id] = nil
+    return nil
+  end
+  return entry.value
+end
+
+local function cover_put(id, value)
+  if covers[id] == nil then
+    cover_order[#cover_order + 1] = id
+    while #cover_order > COVER_LIMIT do
+      local oldest = table.remove(cover_order, 1)
+      covers[oldest] = nil
+    end
+  end
+  -- A failed lookup is cached as an empty string so an empty or broken folder
+  -- is not retried on every open; models.playlist treats "" as "no cover".
+  covers[id] = { value = value or "", at = host.now() }
+end
+
+-- 收藏夹 list-all 不返回封面，用第一个视频的 cover 回填。
 -- 单条 ps=1 请求，失败/空夹返回 nil，models.playlist 会退回 folder 自带字段。
-local function folder_cover(folder)
-  local id = util.field(folder, "media_id", "id")
-  if id == nil then return nil end
+local function folder_cover(folder, budget)
+  local id = folder_id(folder)
+  if id == "" then return nil end
+  local cached = cover_get(id)
+  if cached ~= nil then return cached == "" and nil or cached end
+  if budget.used >= COVER_BUDGET then
+    budget.truncated = true
+    return nil
+  end
+  budget.used = budget.used + 1
   local ok, body = pcall(http.get, "/x/v3/fav/resource/list", {
-    media_id = util.text(id), pn = 1, ps = 1, order = "mtime", type = 0,
+    media_id = id, pn = 1, ps = 1, order = "mtime", type = 0,
   })
   if not ok then return nil end
   local medias = util.list(data_of(body).medias)
-  if #medias == 0 then return nil end
-  return util.image(util.field(medias[1], "cover", "pic"))
+  if #medias == 0 then
+    cover_put(id, nil)
+    return nil
+  end
+  local url = util.image(util.field(medias[1], "cover", "pic"))
+  cover_put(id, url)
+  return url
 end
 
+-- list-all ignores ps/pn (measured 2026-11-21: pn=1/2/3 and ps=5 all return the
+-- same rows), so the whole list arrives at once and is sliced locally. Sending
+-- the host's limit as `ps` produced 50 rows for limit=100 and the host then
+-- declared the list finished — folder 51+ never appeared.
 function M.playlists(limit, offset)
   if store.cookie() == "" then return {} end
   local mid = current_mid()
-  local take, page = util.page_of(limit, offset, 50)
-  local body = http.get("/x/v3/fav/folder/created/list-all", { up_mid = mid, ps = take, pn = page })
-  local data = data_of(body)
-  local rows = util.list(data.list)
-  return util.map_rows(rows, function(item)
-    return models.playlist(item, folder_is_default(item), folder_cover(item))
+  local body = http.get("/x/v3/fav/folder/created/list-all", { up_mid = mid })
+  local rows = util.list(data_of(body).list)
+  local page = pager.slice(rows, limit, offset)
+  -- Covers are resolved AFTER slicing: only the folders actually returned cost
+  -- a request, and only up to COVER_BUDGET of them.
+  local budget = { used = 0, truncated = false }
+  return util.map_rows(page, function(item)
+    return models.playlist(item, folder_is_default(item), folder_cover(item, budget), mid)
   end)
 end
 
-function M.playlist_songs(id, limit, offset)
-  local need = util.number(limit, 50)
-  if need < 1 then need = 50 end
-  if need > 150 then need = 150 end
+-- Remote-paged listing (favourite folder / default folder / UP uploads).
+--
+-- `opts.budget` names the request family (see pager.lua). `opts.cap` is the
+-- remote page size.
+--
+-- Truncation must be VISIBLE (task book §3.3). The host decides `hasMore` from
+-- `rows.length >= limit`, so a walk that ran out of request budget and returned
+-- a short page reads as "this is the end of the folder" — the user loses the
+-- rest of a 2000-song folder with no error and no way to scroll further. T7/D5
+-- was exactly that: offset=1200,limit=100 answered 80 rows with hasMore=false.
+--
+-- The chosen handling is "raise a retryable error, never a short page": the
+-- plugin cannot sleep, so continuing to request only burns the rest of the
+-- budget, and returning fewer rows is indistinguishable from a real end. A
+-- transient error makes the client show "retry", which is the honest answer.
+local function folder_page(key, load, limit, offset, cap, budget)
+  local want = util.number(limit, 50)
+  if want < 1 then want = 50 end
   local skip = util.number(offset, 0)
   if skip < 0 then skip = 0 end
-  local rows = collect(function(pn, ps)
+  local hops = pager.hops(skip, want, cap)
+  local rows, _, truncated = pager.walk(key, load, want, skip, hops, nil, {
+    cap = cap, budget = budget,
+  })
+  local out = song_rows(rows)
+  -- Only a truncated walk that did NOT fill the window is a lie. A truncated
+  -- walk that still returned `want` rows is a complete page: the client has
+  -- what it asked for and its own next call will page on.
+  if truncated and #out < want then errors.throw("transient") end
+  return out
+end
+
+-- ---------------------------------------------------------------------------
+-- Charts
+-- ---------------------------------------------------------------------------
+--
+-- A chart id has to be something `playlistSongs` can consume, because that is
+-- exactly how the host reads a chart (catalog.dart providerCharts: charts()
+-- then playlistSongs(chart.id) for each one, inside one Future.wait). The old
+-- `rank:all` id went straight to /x/v3/fav/resource/list and came back 400, so
+-- the whole Future.wait threw and no chart ever rendered.
+--
+--   charts()                 -> [{ id = "chart:0", ... }]
+--   playlistSongs("chart:0") -> that chart's rows
+--   playlistSongs("12345")   -> favourite folder (unchanged)
+--
+-- The rows are cached so opening the panel is one ranking request, not two:
+-- charts() fills the cache and the immediately following playlistSongs reads
+-- it back.
+local CHART_TTL_MS = 6 * 60 * 60 * 1000
+local CHART_LIMIT = 8
+local CHART_RID = "0"
+local chart_cache = {}
+local chart_order = {}
+
+store.on_reset(function()
+  chart_cache = {}
+  chart_order = {}
+end)
+
+local function chart_key(rid) return "chart:" .. rid end
+
+local function chart_get(rid)
+  local entry = chart_cache[chart_key(rid)]
+  if entry == nil then return nil end
+  if host.now() - entry.at >= CHART_TTL_MS then
+    chart_cache[chart_key(rid)] = nil
+    return nil
+  end
+  return entry.rows
+end
+
+local function chart_put(rid, rows)
+  local key = chart_key(rid)
+  if chart_cache[key] == nil then
+    chart_order[#chart_order + 1] = key
+    while #chart_order > CHART_LIMIT do
+      local oldest = table.remove(chart_order, 1)
+      chart_cache[oldest] = nil
+    end
+  end
+  chart_cache[key] = { rows = rows, at = host.now() }
+end
+
+-- Raw ranking rows, cached BEFORE mapping.
+--
+-- T8/T03: the album shelf asks the chart for multi-part rows, and the mapped
+-- `song` shape has no `videos` — `song_rows` projects only id/title/artist/
+-- cover/duration, so `util.number(item.videos, 0)` was always 0 and the shelf
+-- stayed empty on the live host (实测记录 G8_homefeed_cost_after:
+-- `albums(18) {} newRequests=1`). Cache the wire rows and map per caller.
+local function chart_raw(rid)
+  local cached = chart_get(rid)
+  if cached ~= nil then return cached end
+  local body = http.get("/x/web-interface/ranking/v2", { rid = rid, type = "all" })
+  local rows = util.list(data_of(body).list)
+  chart_put(rid, rows)
+  return rows
+end
+
+local function chart_rows(rid)
+  return song_rows(chart_raw(rid))
+end
+
+-- `id` is a chart id (`chart:<rid>`) or a favourite folder's media_id.
+local function is_chart(id)
+  return string.sub(id, 1, 6) == "chart:"
+end
+
+function M.playlist_songs(id, limit, offset)
+  local media = util.text(id)
+  if is_chart(media) then
+    local rid = string.sub(media, 7)
+    if rid == "" then errors.throw("param") end
+    return pager.slice(chart_rows(rid), limit, offset)
+  end
+  return folder_page("fav:" .. media, function(pn)
     local body = http.get("/x/v3/fav/resource/list", {
-      media_id = util.text(id), pn = pn, ps = ps, order = "mtime", type = 0,
+      media_id = media, pn = pn, ps = 40, order = "mtime", type = 0,
     })
-    return util.list(data_of(body).medias)
-  end, need, skip, 40, 6)
-  return util.map_rows(rows, function(item)
-    local song = models.song(item)
-    song.id = util.text(util.field(item, "bvid", "bv_id"))
-    song.albumId = song.id
-    if song.id == "" then return nil end
-    return song
-  end)
+    local data = data_of(body)
+    local info = type(data.info) == "table" and data.info or {}
+    return util.list(data.medias), util.opt_number(info.media_count)
+  end, limit, offset, 40, pager.PLAINTEXT_BUDGET)
 end
 
 function M.favorites(limit, offset)
   if store.cookie() == "" then return {} end
   local mid = current_mid()
-  -- 找默认夹子的 ps=50 保持不动（那是"找哪个夹子"）。
-  local body = http.get("/x/v3/fav/folder/created/list-all", { up_mid = mid, ps = 50, pn = 1 })
-  local data = data_of(body)
-  local rows = util.list(data.list)
+  local body = http.get("/x/v3/fav/folder/created/list-all", { up_mid = mid })
+  local rows = util.list(data_of(body).list)
   local default_id = nil
   for index = 1, #rows do
     if folder_is_default(rows[index]) then
-      default_id = util.text(util.field(rows[index], "media_id", "id"))
+      default_id = folder_id(rows[index])
       break
     end
   end
-  if default_id == nil then return {} end
-  local need = util.number(limit, 50)
-  if need < 1 then need = 50 end
-  if need > 150 then need = 150 end
-  local skip = util.number(offset, 0)
-  if skip < 0 then skip = 0 end
-  local videos = collect(function(pn, ps)
+  if default_id == nil or default_id == "" then return {} end
+  return folder_page("fav:" .. default_id, function(pn)
     local page_body = http.get("/x/v3/fav/resource/list", {
-      media_id = default_id, pn = pn, ps = ps, order = "mtime", type = 0,
+      media_id = default_id, pn = pn, ps = 40, order = "mtime", type = 0,
     })
-    return util.list(data_of(page_body).medias)
-  end, need, skip, 40, 6)
-  return util.map_rows(videos, function(item)
-    local song = models.song(item)
-    song.id = util.text(util.field(item, "bvid", "bv_id"))
-    song.albumId = song.id
-    if song.id == "" then return nil end
-    return song
-  end)
+    local data = data_of(page_body)
+    local info = type(data.info) == "table" and data.info or {}
+    return util.list(data.medias), util.opt_number(info.media_count)
+  end, limit, offset, 40, pager.PLAINTEXT_BUDGET)
 end
 
+-- `id` is a song identity and MUST go through ids.parse. T7/D1: this op used a
+-- bare `util.text(id)`, so every row coming from `charts` or
+-- `homeFeed.featured` — which carry `bvid:cid` since v0.2.0 — was sent as
+-- `view?bvid=BV…%3A43727326650` and answered 400. The whole chart was
+-- un-favouritable while `addToPlaylist` on the same id worked, because only that
+-- path parsed the identity. The cid is not needed here (fav/resource/deal takes
+-- an aid), but the bvid must be extracted rather than passed through.
 function M.set_favorite(id, favorite)
   auth.require_user()
-  local bvid = util.text(id)
+  local bvid, _ = ids.parse(id)
   local view = http.get("/x/web-interface/view", { bvid = bvid })
   local aid = util.number(data_of(view).aid, 0)
   if aid <= 0 then error("Gateway code -400", 0) end
-  local folders = http.get("/x/v3/fav/folder/created/list-all",
-                           { up_mid = store.mid, ps = 50, pn = 1 })
+  local folders = http.get("/x/v3/fav/folder/created/list-all", { up_mid = store.mid })
   local rows = util.list(data_of(folders).list)
   local default_id = nil
   for index = 1, #rows do
     if folder_is_default(rows[index]) then
-      default_id = util.text(util.field(rows[index], "media_id", "id"))
+      default_id = folder_id(rows[index])
       break
     end
   end
-  if default_id == nil then error("Gateway code -400", 0) end
+  if default_id == nil or default_id == "" then error("Gateway code -400", 0) end
   local field = favorite and "add_media_ids" or "del_media_ids"
   http.post("/x/v3/fav/resource/deal", {
     rid = aid,
@@ -218,22 +578,134 @@ function M.set_favorite(id, favorite)
     [field] = default_id,
     csrf = store.csrf(),
   })
+  -- The folder listing and its contents both changed; stale cursors would keep
+  -- serving the removed track.
+  pager.reset("fav:" .. default_id)
   return true
 end
 
+-- ---------------------------------------------------------------------------
+-- Playlist writes
+-- ---------------------------------------------------------------------------
+--
+-- `writable:true` (models.playlist) and these two ops ship together on purpose.
+-- Before T02 the picker listed one synthesised row ("我喜欢的音乐") and its
+-- "新建" button hit a 501. Adding `writable` alone would have surfaced the real
+-- folders and turned every one of them into a 501 on tap — from "one thing
+-- works" to "three of four fail". Neither half is useful without the other.
+
+-- One `view` per song to turn a bvid into the `aid` that fav/resource/deal
+-- wants. Capped, not truncated: a caller that asks for 21 songs gets `param`
+-- and no request is sent, because silently adding the first 20 would report
+-- success for a write that did not happen.
+local ADD_BUDGET = 20
+
+local function aid_of(bvid)
+  local view = http.get("/x/web-interface/view", { bvid = bvid })
+  local aid = util.number(data_of(view).aid, 0)
+  if aid <= 0 then error("Gateway code -400", 0) end
+  return aid
+end
+
+function M.add_to_playlist(playlist, songs)
+  auth.require_user()
+  local media = util.text(playlist)
+  if media == "" then errors.throw("param") end
+  -- A chart is a read-only view of the ranking; it has no media_id to write to.
+  if is_chart(media) then errors.throw("param") end
+  local list = util.list(songs)
+  local count = #list
+  if count == 0 then errors.throw("param") end
+  if count > ADD_BUDGET then errors.throw("param") end
+
+  -- De-duplicated by bvid: the host sends one song today, but a repeated id
+  -- would otherwise cost two view requests and produce the same aid twice.
+  local seen = {}
+  local aids = {}
+  for index = 1, count do
+    local bvid, _ = ids.parse(list[index])
+    if seen[bvid] ~= true then
+      seen[bvid] = true
+      aids[#aids + 1] = aid_of(bvid)
+    end
+  end
+
+  http.post("/x/v3/fav/resource/deal", {
+    rid = table.concat(aids, ","),
+    type = 2,
+    add_media_ids = media,
+    csrf = store.csrf(),
+  })
+  -- Never retried: http.post goes straight to perform with no retry flag, and
+  -- a replay of this write would add the same item twice.
+  --
+  -- The write is asynchronous on Bili's side: measured 2026-11-21
+  -- (实测记录 G12e_deal_delay), a song added to a folder created seconds
+  -- earlier is invisible to fav/resource/list for ~1.5 s. Dropping the cursor
+  -- is still correct — it makes the NEXT read fetch fresh rows — but a caller
+  -- that reads immediately may see the pre-write list. That is Bili's
+  -- consistency window, not a lost write: the row appears on the next open.
+  pager.reset("fav:" .. media)
+  return true
+end
+
+-- `/x/v3/fav/folder/add` probed live 2026-11-21 (实测记录 G12_folder_add):
+-- form `title` + `privacy` (0 = public) + `csrf`, answer `{code:0, data:{id}}`
+-- where `data.id` is the media_id `playlistSongs` consumes. The probe folder was
+-- deleted again in the same run, so the account is back to its six folders.
+--
+-- Note on `success_num`: fav/resource/deal answers `code:0` with
+-- `success_num:0` even when the write DID land (verified: a folder's
+-- media_count went 13 -> 14 under that exact answer, G12c_deal_probe2.log). So
+-- that field cannot be used to report success or failure, and neither can an
+-- immediate read-back: the write is visible to fav/resource/list only after
+-- ~1.5 s (G12e_deal_delay.log). The op reports what the API said, not a guess.
+function M.create_playlist(name, is_public)
+  auth.require_user()
+  local title = util.trim(util.text(name))
+  if title == "" then errors.throw("param") end
+  local body = http.post("/x/v3/fav/folder/add", {
+    title = title,
+    privacy = is_public and 0 or 1,
+    csrf = store.csrf(),
+  })
+  local data = data_of(body)
+  local id = util.text(util.field(data, "id", "media_id"))
+  if id == "" then errors.throw("transient") end
+  -- The folder list changed, so the cached listing is stale.
+  pager.reset()
+  return models.playlist(data, false, nil, store.mid)
+end
+
+-- Risk-control codes the platform uses to refuse an anonymous UP lookup.
+-- Measured 2026-11-21: four parameter sets (including the full `dm_img_*`
+-- set), own mid and someone else's, all answered -403 没有权限访问.
+local BLOCKED = { ["forbidden"] = true, ["ratelimit"] = true }
+
 function M.artist_songs(id, limit, offset)
-  local need = util.number(limit, 50)
-  if need < 1 then need = 50 end
-  if need > 150 then need = 150 end
-  local skip = util.number(offset, 0)
-  if skip < 0 then skip = 0 end
-  local rows = collect(function(pn, ps)
+  local mid = util.text(id)
+  -- SIGNED family: every call here is wbi-signed and may also refresh the salt,
+  -- so its request ceiling is 12, not the plaintext 32 (evidence/t7/
+  -- R2_artist_budget.log: 14 signed calls succeed, 17 pages is already a 408 and
+  -- the VM is rebuilt). With the plaintext budget this op killed the host at
+  -- offset=800 instead of answering — T7/D4.
+  local ok, rows = pcall(folder_page, "arc:" .. mid, function(pn)
     local body = wbi.get("/x/space/wbi/arc/search", {
-      mid = util.text(id), ps = ps, pn = pn, order = "pubdate",
+      mid = mid, ps = 50, pn = pn, order = "pubdate",
     })
-    return util.list((data_of(body).list or {}).vlist)
-  end, need, skip, 50, 6)
-  return util.map_rows(rows, models.song)
+    local data = data_of(body)
+    local page = type(data.page) == "table" and data.page or {}
+    return util.list((data.list or {}).vlist), util.opt_number(page.count)
+  end, limit, offset, 50, pager.SIGNED_BUDGET)
+  if ok then return rows end
+  -- The host has no try around artistSongs (platform_catalog.dart:313), so one
+  -- exception fails artistDetails as a whole and the page degrades to a single
+  -- "load failed" card. A blocked endpoint is not a network fault: report an
+  -- empty page so the artist page still renders its hero and "暂无热门歌曲".
+  if BLOCKED[errors.kind_from(rows)] then return {} end
+  -- A real network failure must NOT be swallowed into "this artist has no
+  -- uploads" — that is the silent-empty bug this task exists to remove.
+  error(rows, 0)
 end
 
 -- UP 主详情：宿主进「歌手」页先调 artist 拿名字/头像。B站 UP 不是歌手，
@@ -255,22 +727,204 @@ function M.artist_albums(id, limit, offset)
 end
 
 -- ---------------------------------------------------------------------------
+-- Multi-part videos as albums (T04, plan A)
+-- ---------------------------------------------------------------------------
+--
+-- `album` / `albumSongs` were fully implemented but unreachable: the host only
+-- enters an album from a row in `homeFeed.albums` or `albums()`, and neither
+-- existed. Declaring `browseAlbums` without implementing `albums` is worse than
+-- not declaring it — platform_catalog.dart:117 really calls albums() inside a
+-- Future.wait, so a missing op empties the whole home page.
+--
+-- So both land together: homeFeed.albums is the multi-part videos among the
+-- popular rows PLUS the ranking chart, and albums() serves the same cached list.
+--
+-- T8/D5: the first version sent one `view` request per candidate to learn
+-- whether it had several parts, so opening the home page always cost 8 probes
+-- and the album list was still empty whenever those 8 happened to be single-P.
+-- The popular/ranking rows already carry `videos` (the part count) — measured
+-- 24/24 against `pages` in T7 — so the decision is free. `view` is now sent
+-- only for rows that claim more than one part, and only to fill in the title,
+-- cover and exact `songCount` that the feed row does not have.
+local ALBUM_TTL_MS = 6 * 60 * 60 * 1000
+local ALBUM_LIMIT = 16
+-- One shelf cache slot, shared by both entry points. T10 changed the normal
+-- source so that `homeFeed` and `albums()` ask for the same candidate set; two
+-- slots would then just pay for the same list twice. A DEGRADED result is
+-- never written here (see `album_rows`): a temporary chart failure must not be
+-- frozen into a 6 h empty shelf.
+local album_cache = {}
+local popular_cache = nil
+
+store.on_reset(function()
+  album_cache = {}
+  popular_cache = nil
+end)
+
+-- One popular response shared by homeFeed and the album probe. They used to
+-- fetch it separately, so opening the home page cost two identical requests.
+local function popular_rows()
+  if popular_cache ~= nil and host.now() - popular_cache.at < ALBUM_TTL_MS then
+    return popular_cache.rows
+  end
+  local body = http.get("/x/web-interface/popular", { ps = 20, pn = 1 })
+  local rows = util.list(data_of(body).list)
+  popular_cache = { rows = rows, at = host.now() }
+  return rows
+end
+
+-- Row -> album, using the feed row itself as the source of truth.
+--
+-- `videos` is the part count on the wire. When it is missing (older fixtures,
+-- a row shape that omits it) the row is treated as single-part: guessing would
+-- put a single-part video in the album shelf, and the host has no way to tell
+-- an album of one song from a song.
+--
+-- `detail` is the optional `view` answer, fetched only for multi-part rows so
+-- the album can carry the video's own title/cover instead of the feed's.
+local function album_from(item, detail)
+  local bvid = util.text(item.bvid)
+  if bvid == "" then return nil end
+  local videos = util.number(item.videos, 0)
+  if videos < 2 then return nil end
+  local data = type(detail) == "table" and data_of(detail) or nil
+  local pages = data ~= nil and util.list(data.pages) or nil
+  -- Feed rows and `view` both nest the uploader under `owner`; a search-style
+  -- row puts it at the top level. Read both shapes rather than one.
+  local feed_owner = type(item.owner) == "table" and item.owner or item
+  local owner = models.artist(
+    util.field(feed_owner, "mid", "uid"),
+    util.field(feed_owner, "name", "author", "uname"))
+  local count = videos
+  if pages ~= nil and #pages > 0 then count = #pages end
+  local title = util.text(item.title)
+  local cover = util.field(item, "pic", "cover")
+  if data ~= nil then
+    local own = util.text(data.title)
+    if own ~= "" then title = own end
+    local own_cover = util.field(data, "pic", "cover")
+    if own_cover ~= nil and own_cover ~= "" then cover = own_cover end
+    local own_owner = type(data.owner) == "table" and data.owner or {}
+    if util.text(own_owner.name) ~= "" then
+      owner = models.artist(own_owner.mid, own_owner.name)
+    end
+  end
+  return {
+    id = bvid,
+    title = util.clean_title(title),
+    coverUrl = util.image(cover),
+    songCount = count,
+    artists = { owner },
+  }
+end
+
+-- Rows that claim more than one part.
+--
+-- Two sources, deduplicated by bvid, popular first (its title/`videos` are the
+-- ones the home page already shows):
+--
+--   popular  — the list `featuredSongs` comes from.
+--   ranking  — the only source with multi-part rows on the wire: measured live,
+--              all 20 popular rows are single-part
+--              (实测记录 R18_popular_videos), so a popular-only shelf is
+--              permanently empty.
+--
+-- T10/D2: folding the chart in used to blow the 250k instruction budget
+-- (`homeFeed THREW 408`). The cause was never the chart's size, it was MAPPING
+-- it: `chart_rows` turns 100 rows into song shapes (no `videos` left, and 100
+-- decoded rows is what the budget is spent on) —
+-- 实测记录 R25_homefeed_chart_mapped.log. Reading the RAW rows costs 6
+-- requests and returns albums fine — 实测记录 R27_homefeed_chart_raw.log.
+--
+-- `allow_degrade` guards the chart request alone. Popular is the home page's
+-- main content, so its failure must still surface; anything else (a bad row
+-- mapper, a broken view loop) is a programming error and must not be laundered
+-- into "the home page is empty today".
+local function album_candidates(allow_degrade)
+  local out = {}
+  local seen = {}
+  local function take(rows)
+    local source = util.list(rows)
+    for index = 1, #source do
+      local item = source[index]
+      local bvid = util.text(item.bvid)
+      if bvid ~= "" and seen[bvid] == nil and util.number(item.videos, 0) > 1 then
+        seen[bvid] = true
+        out[#out + 1] = item
+      end
+    end
+  end
+  take(popular_rows())
+  local degraded = false
+  local ok, rows = pcall(chart_raw, CHART_RID)
+  if ok then
+    take(rows)
+  elseif allow_degrade then
+    -- Drop the chart, keep the page. Not cached, so the next call retries.
+    degraded = true
+  else
+    -- `error(err, 0)` keeps the thrown text (`KIND x` / `HTTP n` /
+    -- `Gateway code n`) intact, so main.lua still classifies it correctly.
+    error(rows, 0)
+  end
+  return out, degraded
+end
+
+-- Build the shelf from the candidate set. One cache slot for both entry points;
+-- a degraded build is returned but NOT stored.
+local function album_rows(allow_degrade)
+  local cached = album_cache.wide
+  if cached ~= nil and host.now() - cached.at < ALBUM_TTL_MS then
+    return cached.rows
+  end
+  local candidates, degraded = album_candidates(allow_degrade)
+  local out = {}
+  -- Count ATTEMPTS, not successes: with a success counter one failed `view`
+  -- silently pushes the real spend past ALBUM_LIMIT while the budget assertion
+  -- still reads 16 (T10/D5).
+  local attempts = 0
+  for index = 1, #candidates do
+    if attempts >= ALBUM_LIMIT then break end
+    attempts = attempts + 1
+    local item = candidates[index]
+    -- Only multi-part rows reach here, so this request buys real information
+    -- (the video's own title/cover and the exact part count). A failure skips
+    -- the request, not the album: the feed row still says how many parts there
+    -- are, and one dead video must not take the whole shelf down.
+    local ok, body = pcall(http.get, "/x/web-interface/view", { bvid = util.text(item.bvid) })
+    local album = album_from(item, ok and body or nil)
+    if album ~= nil then out[#out + 1] = album end
+  end
+  if not degraded then
+    album_cache.wide = { rows = out, at = host.now() }
+  end
+  return out
+end
+
+-- The browse shelf. Same candidate set as the home page (T10/D4), and it does
+-- NOT degrade: this is an explicit "show me the album shelf" call, so a chart
+-- failure belongs to the caller, as it did before T10.
+function M.albums(limit, offset)
+  return pager.slice(album_rows(false), limit, offset)
+end
+
+-- ---------------------------------------------------------------------------
 -- Discovery
 -- ---------------------------------------------------------------------------
 
+-- Home. Shares the shelf source and cache with albums(): both read the popular
+-- list plus the RAW chart rows (see album_candidates for why raw, not mapped).
 function M.home_feed()
-  local body = http.get("/x/web-interface/popular", { ps = 20, pn = 1 })
-  local data = data_of(body)
-  local songs = util.map_rows(util.list(data.list), models.song)
-  return { featuredSongs = songs }
+  return {
+    featuredSongs = song_rows(popular_rows()),
+    albums = album_rows(true),
+  }
 end
 
 function M.charts()
-  local body = http.get("/x/web-interface/ranking/v2", { rid = 0, type = "all" })
-  local data = data_of(body)
-  local songs = util.map_rows(util.list(data.list), models.song)
+  local rows = chart_rows(CHART_RID)
   return {
-    { id = "rank:all", name = "全站排行", songCount = #songs, songs = songs },
+    { id = chart_key(CHART_RID), name = "全站排行", songCount = #rows },
   }
 end
 
@@ -286,12 +940,14 @@ function M.recommendations(limit, seed)
     id = util.text(rows[1].bvid)
   end
   local body = http.get("/x/web-interface/archive/related", { bvid = id })
-  local rows = util.list(data_of(body))
   local out = {}
+  local rows = util.list(data_of(body))
   for index = 1, #rows do
     if #out >= take then break end
-    local song = models.song(rows[index])
-    out[#out + 1] = song
+    local item = rows[index]
+    if type(item) == "table" and util.text(item.bvid) ~= "" then
+      out[#out + 1] = models.song(item)
+    end
   end
   return out
 end
@@ -300,23 +956,86 @@ end
 -- Comments
 -- ---------------------------------------------------------------------------
 
+-- The host advances its own offset by the number of rows it received
+-- (`song_comments_controller.dart`), so a short remote page must not be treated
+-- as the last page and the offset must not be divided by ps to guess a page
+-- number: both produced duplicated and permanently missing comments.
 function M.comments(id, limit, offset)
-  local take, page = util.page_of(limit, offset, 20)
-  local view = http.get("/x/web-interface/view", { bvid = util.text(id) })
+  local want = util.number(limit, 20)
+  if want < 1 then want = 20 end
+  local skip = util.number(offset, 0)
+  if skip < 0 then skip = 0 end
+  -- Same identity rule as set_favorite: a `bvid:cid` id from a chart or the home
+  -- feed used to be pasted whole into `view?bvid=`, which answered 400 and made
+  -- the comment panel fail for exactly the rows T6 had just made visible. The
+  -- aid is per-video, so the cid is parsed and dropped on purpose.
+  local bvid, _ = ids.parse(id)
+  local view = http.get("/x/web-interface/view", { bvid = bvid })
   local aid = util.number(data_of(view).aid, 0)
   if aid <= 0 then error("Gateway code -400", 0) end
-  local body = http.get("/x/v2/reply", {
-    type = 1, oid = aid, pn = page, ps = take, sort = 2,
-  })
-  local data = data_of(body)
-  local replies = util.map_rows(util.list(data.replies), models.comment)
-  local page_info = type(data.page) == "table" and data.page or {}
-  local count = util.number(page_info.count, 0)
+
+  local cap = 20
+  local hops = pager.hops(skip, want, cap)
+  -- nil means "the endpoint never reported a count"; 0 is a real answer. The
+  -- old code collapsed both into 0 and then overwrote the total with the rows
+  -- it happened to read, so a truncated walk reported itself as complete.
+  local total = nil
+  -- strict_seek: reply pages really are position slices (20 rows each, no
+  -- overlap across pn=1/2/3/4/5/10/20/33/66 — 实测记录 probe_reply_pages),
+  -- so a deep offset can jump straight to its page instead of walking there and
+  -- running out of the per-call request budget (bili/pager.lua PLAINTEXT_BUDGET).
+  --
+  -- `sort=0` is TIME order. Measured live: sort=0 sums to 32 likes across the
+  -- page while sort=1 and sort=2 both sum to 2 793 193 — i.e. the old `sort=2`
+  -- was the hot list wearing the "latest" name (实测记录 R29_reply_sort_live).
+  local replies, _, truncated = pager.walk("reply:" .. tostring(aid), function(pn)
+    local body = http.get("/x/v2/reply", {
+      type = 1, oid = aid, pn = pn, ps = cap, sort = 0,
+    })
+    local data = data_of(body)
+    local page = type(data.page) == "table" and data.page or {}
+    local count = max_number(page.count, page.acount)
+    -- A page WITH rows that reports 0 (or nothing) says nothing about the size.
+    -- Writing that 0 as the total made `skip >= total` true from then on, so one
+    -- count-less response froze the thread at its first page forever
+    -- (实测记录 R3_comments_latch). Unknown stays unknown.
+    local reported = (count > 0) and count or nil
+    if reported ~= nil then total = reported end
+    return util.map_rows(util.list(data.replies), models.comment), reported
+  end, want, skip, hops, nil, { cap = cap, strict_seek = true })
+
+  -- The hot bucket is an EXTRA SCREEN, not a page: one request, first page only,
+  -- never part of the walk, never part of `total`/`hasMore`. Requesting it on
+  -- every page of `latest` would pay the same 20 rows again for a list the
+  -- client already holds, and its ordering shifts with likes, so paging it
+  -- would duplicate and skip rows (实测记录 R19_reply_sort_pages).
+  local hot = {}
+  if skip == 0 then
+    -- Failure here must not touch `latest`: a blocked or rate-limited hot list
+    -- is a missing panel, not a broken thread. The result is not cached, so the
+    -- next call retries instead of serving an empty list for the session.
+    local ok, body = pcall(http.get, "/x/v2/reply", {
+      type = 1, oid = aid, pn = 1, ps = cap, sort = 1,
+    })
+    if ok then
+      hot = util.map_rows(util.list(data_of(body).replies), models.comment)
+    end
+  end
+
+  -- The endpoint's count is the ONLY source of `total`. `skip + #replies` used
+  -- to stand in for it, which is the request offset wearing the total's name:
+  -- comments(offset=1000) answered `total=1000` for a thread of 60
+  -- (实测记录 R9_past_end_offline) and the panel then said "1000 条" with
+  -- nothing to load. A count the endpoint never sent stays unknown: the host
+  -- reads a missing `total` as 0 (SongCommentPage.fromJson), which is the honest
+  -- "we do not know" and never a fabricated deep number.
   return {
     latest = replies,
-    hot = {},
-    total = count,
-    hasMore = util.number(page_info.num, page) * util.number(page_info.size, take) < count,
+    hot = hot,
+    total = total,
+    -- A truncated walk is not "the end": say there is more, so the client keeps
+    -- asking instead of closing the thread on a budget cutoff.
+    hasMore = truncated or (total ~= nil and skip + #replies < total),
   }
 end
 
