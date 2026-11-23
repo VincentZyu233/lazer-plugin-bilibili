@@ -388,21 +388,28 @@ local function folder_cover(folder, budget)
   return url
 end
 
--- list-all ignores ps/pn (measured 2026-11-21: pn=1/2/3 and ps=5 all return the
--- same rows), so the whole list arrives at once and is sliced locally. Sending
--- the host's limit as `ps` produced 50 rows for limit=100 and the host then
--- declared the list finished — folder 51+ never appeared.
 function M.playlists(limit, offset)
   if store.cookie() == "" then return {} end
   local mid = current_mid()
-  local body = http.get("/x/v3/fav/folder/created/list-all", { up_mid = mid })
-  local rows = util.list(data_of(body).list)
+  -- 使用原生带 cover 封面的 /x/v3/fav/folder/created/list 接口，杜绝逐个请求与 COVER_BUDGET 截断
+  local body = http.get("/x/v3/fav/folder/created/list", { up_mid = mid, pn = 1, ps = 100 })
+  local data = data_of(body)
+  local rows = util.list(data.list)
+  local total_count = util.number(data.count, 0)
+  if total_count > #rows and #rows > 0 then
+    local page_count = math.ceil(total_count / 100)
+    for p = 2, page_count do
+      local p_body = http.get("/x/v3/fav/folder/created/list", { up_mid = mid, pn = p, ps = 100 })
+      local p_rows = util.list(data_of(p_body).list)
+      if #p_rows == 0 then break end
+      for index = 1, #p_rows do
+        rows[#rows + 1] = p_rows[index]
+      end
+    end
+  end
   local page = pager.slice(rows, limit, offset)
-  -- Covers are resolved AFTER slicing: only the folders actually returned cost
-  -- a request, and only up to COVER_BUDGET of them.
-  local budget = { used = 0, truncated = false }
   return util.map_rows(page, function(item)
-    return models.playlist(item, folder_is_default(item), folder_cover(item, budget), mid)
+    return models.playlist(item, folder_is_default(item), nil, mid)
   end)
 end
 
